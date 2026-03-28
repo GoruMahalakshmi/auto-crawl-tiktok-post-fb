@@ -11,12 +11,6 @@ This project provides an end-to-end pipeline for social media content automation
 4.  **Engage:** Automate comment replies using AI-integrated backends (optional/configured).
 5.  **Monitor:** Track performance and pipeline status through a modern React dashboard.
 
-## 📸 Screenshots
-
-| Dashboard Overview | Post Management |
-| :---: | :---: |
-*(Place your actual screenshots in a `docs/` folder and update these paths)*
-
 ## 🛠 Tech Stack
 
 *   **Backend:** FastAPI (Python 3.10+)
@@ -91,6 +85,7 @@ This project provides an end-to-end pipeline for social media content automation
 Feel free to open issues or submit pull requests for any improvements.
 
 Give me a coffee!!
-<img width="259" height="332" alt="image" src="https://github.com/user-attachments/assets/a3909d0a-b2ba-4dce-8064-2bc435beaa22" />
+
+<img width="130" height="166" alt="image" src="https://github.com/user-attachments/assets/a3909d0a-b2ba-4dce-8064-2bc435beaa22" />
 ---
 *Developed for automated social media management workflows.*
