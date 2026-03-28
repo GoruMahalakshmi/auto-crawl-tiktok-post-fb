@@ -1,0 +1,70 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: social_db
+    restart: always
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: social_auto
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin -d postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: social_backend
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: always
+    logging: *default-logging
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./videos_storage:/app/downloads
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://admin:adminpassword@db/social_auto
+      - GEMINI_API_KEY=
+      - ADMIN_PASSWORD=
+      - BASE_URL=
+
+  frontend:
+    build: ./frontend
+    container_name: social_frontend
+    restart: always
+    logging: *default-logging
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: social_tunnel
+    restart: always
+    logging: *default-logging
+    environment:
+      - TUNNEL_TOKEN=
+    command: tunnel --no-autoupdate run
+    depends_on:
+      backend:
+        condition: service_started
