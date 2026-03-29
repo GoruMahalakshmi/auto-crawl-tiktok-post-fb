@@ -3,7 +3,9 @@ import {
   Activity,
   AlertTriangle,
   Bot,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleCheck,
   CircleX,
   Clock,
@@ -14,6 +16,8 @@ import {
   Globe2,
   KeyRound,
   LogOut,
+  Menu,
+  MessagesSquare,
   Pause,
   Play,
   PlusCircle,
@@ -25,6 +29,7 @@ import {
   Terminal,
   Trash2,
   UserPlus,
+  X,
   Zap,
 } from 'lucide-react';
 
@@ -36,9 +41,9 @@ const SYSTEM_EVENT_PAGE_SIZE = 3;
 const SYSTEM_EVENT_FETCH_LIMIT = 24;
 const FIELD_CLASS = 'field-input w-full rounded-2xl px-4 py-3 text-sm text-white';
 const BUTTON_DISABLED = 'disabled:cursor-not-allowed disabled:opacity-50';
-const BUTTON_PRIMARY = `btn-primary inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${BUTTON_DISABLED}`;
-const BUTTON_SECONDARY = `btn-secondary inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${BUTTON_DISABLED}`;
-const BUTTON_GHOST = `btn-ghost inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${BUTTON_DISABLED}`;
+const BUTTON_PRIMARY = `btn-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${BUTTON_DISABLED}`;
+const BUTTON_SECONDARY = `btn-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${BUTTON_DISABLED}`;
+const BUTTON_GHOST = `btn-ghost inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${BUTTON_DISABLED}`;
 
 const DEFAULT_STATS = {
   total: 0,
@@ -63,6 +68,19 @@ const DEFAULT_RUNTIME_FORM = {
   TUNNEL_TOKEN: '',
 };
 
+function buildReplyAutomationDraft(pageItem) {
+  return {
+    comment_auto_reply_enabled: pageItem?.comment_auto_reply_enabled ?? true,
+    comment_ai_prompt: pageItem?.comment_ai_prompt || '',
+    message_auto_reply_enabled: pageItem?.message_auto_reply_enabled ?? false,
+    message_ai_prompt: pageItem?.message_ai_prompt || '',
+    message_reply_schedule_enabled: pageItem?.message_reply_schedule_enabled ?? false,
+    message_reply_start_time: pageItem?.message_reply_start_time || '08:00',
+    message_reply_end_time: pageItem?.message_reply_end_time || '22:00',
+    message_reply_cooldown_minutes: pageItem?.message_reply_cooldown_minutes ?? 0,
+  };
+}
+
 function extractRuntimeForm(payload) {
   return {
     BASE_URL: payload?.settings?.BASE_URL?.value || '',
@@ -86,6 +104,7 @@ const NAV_ITEMS = [
   { id: 'campaigns', label: 'Chiến dịch', description: 'Nguồn, trang và chiến dịch.', icon: Share2 },
   { id: 'queue', label: 'Lịch đăng', description: 'Video, lịch và caption.', icon: Clock },
   { id: 'engagement', label: 'Tương tác', description: 'Bình luận và phản hồi AI.', icon: Bot },
+  { id: 'messages', label: 'Tin nhắn AI', description: 'Prompt và inbox tự động.', icon: MessagesSquare },
   { id: 'operations', label: 'Vận hành', description: 'Worker, queue và log.', icon: Server },
   { id: 'security', label: 'Bảo mật', description: 'Phiên, mật khẩu, người dùng.', icon: ShieldCheck },
 ];
@@ -102,7 +121,11 @@ const STATUS_LABELS = {
   posted: 'Đã đăng',
   failed: 'Thất bại',
   replied: 'Đã trả lời',
+  ignored: 'Bỏ qua',
   page_access_token: 'Token trang',
+  user_access_token: 'Token người dùng',
+  invalid_token: 'Token không hợp lệ',
+  network_error: 'Lỗi kết nối',
   legacy_webhook: 'Webhook cũ',
   invalid_encryption: 'Lỗi giải mã',
   missing: 'Chưa có',
@@ -118,6 +141,9 @@ const TONE_CLASSES = {
 
 const PAGE_TOKEN_META = {
   page_access_token: { label: 'Token trang hợp lệ', tone: 'emerald' },
+  user_access_token: { label: 'Đang dùng user token', tone: 'rose' },
+  invalid_token: { label: 'Token không hợp lệ', tone: 'rose' },
+  network_error: { label: 'Chưa kiểm tra được token', tone: 'amber' },
   legacy_webhook: { label: 'Dữ liệu webhook cũ', tone: 'amber' },
   invalid_encryption: { label: 'Lỗi giải mã token', tone: 'rose' },
   missing: { label: 'Chưa có token', tone: 'slate' },
@@ -129,6 +155,13 @@ function cx(...values) {
 
 function parseMessage(payload, fallback) {
   return payload?.detail || payload?.message || fallback;
+}
+
+function summarizeText(value, fallback = 'Chưa có nội dung.', maxLength = 110) {
+  const normalized = (value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return fallback;
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trim()}...`;
 }
 
 function formatDateTime(isoString, options = {}) {
@@ -167,7 +200,11 @@ function getStatusClasses(status) {
     posted: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
     failed: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
     replied: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+    ignored: 'border-white/10 bg-white/5 text-slate-200',
     page_access_token: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+    user_access_token: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
+    invalid_token: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
+    network_error: 'border-amber-400/25 bg-amber-400/10 text-amber-100',
     legacy_webhook: 'border-amber-400/25 bg-amber-400/10 text-amber-100',
     invalid_encryption: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
     missing: 'border-white/10 bg-white/5 text-slate-200',
@@ -191,6 +228,49 @@ function getPageTokenMeta(tokenKind) {
   return PAGE_TOKEN_META[tokenKind] || PAGE_TOKEN_META.missing;
 }
 
+function getResolvedPageTokenKind(pageItem, validation) {
+  return validation?.token_kind || pageItem?.token_kind || 'missing';
+}
+
+function getMessengerConnectionMeta(validation) {
+  const connection = validation?.messenger_connection;
+  if (!validation) {
+    return {
+      label: 'Webhook chưa kiểm tra',
+      tone: 'slate',
+      detail: 'Bấm xác minh để xem trạng thái webhook feed và messages.',
+    };
+  }
+  if (validation.ok === false) {
+    return {
+      label: 'Token chưa đạt',
+      tone: 'rose',
+      detail: validation.message || 'Không thể kiểm tra kết nối webhook fanpage.',
+    };
+  }
+  if (connection?.connected) {
+    const appName = connection.connected_app?.name || 'app hiện tại';
+    return {
+      label: 'Webhook đã kết nối',
+      tone: 'emerald',
+      detail: `Đang nhận feed và messages qua ${appName}.`,
+    };
+  }
+  return {
+    label: 'Webhook chưa kết nối',
+    tone: connection?.ok === false ? 'rose' : 'amber',
+    detail: connection?.message || 'Fanpage chưa đăng ký nhận feed và messages.',
+  };
+}
+
+function buildPageCheckSnapshot(payload) {
+  return {
+    ...payload?.validation,
+    messenger_connection: payload?.messenger_connection || payload?.validation?.messenger_connection || null,
+    checked_at: new Date().toISOString(),
+  };
+}
+
 function StatusIcon({ status, className = '' }) {
   if (['posted', 'completed', 'active', 'replied', 'page_access_token'].includes(status)) {
     return <CircleCheck className={cx('h-3.5 w-3.5', className)} />;
@@ -198,10 +278,13 @@ function StatusIcon({ status, className = '' }) {
   if (['failed', 'invalid_encryption'].includes(status)) {
     return <CircleX className={cx('h-3.5 w-3.5', className)} />;
   }
+  if (['user_access_token', 'invalid_token'].includes(status)) {
+    return <CircleX className={cx('h-3.5 w-3.5', className)} />;
+  }
   if (['pending', 'queued', 'processing', 'downloading'].includes(status)) {
     return <RefreshCw className={cx('h-3.5 w-3.5 animate-spin', className)} />;
   }
-  if (['paused', 'ready', 'legacy_webhook'].includes(status)) {
+  if (['paused', 'ready', 'legacy_webhook', 'ignored', 'network_error'].includes(status)) {
     return <Radio className={cx('h-3.5 w-3.5', className)} />;
   }
   return <ChevronRight className={cx('h-3.5 w-3.5', className)} />;
@@ -211,7 +294,7 @@ function StatusPill({ tone = 'slate', icon: Icon, children, className = '' }) {
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium',
         TONE_CLASSES[tone] || TONE_CLASSES.slate,
         className
       )}
@@ -225,29 +308,29 @@ function StatusPill({ tone = 'slate', icon: Icon, children, className = '' }) {
 function MetricCard({ icon, label, value, detail, tone = 'slate' }) {
   const IconComponent = icon;
   return (
-    <div className="metric-card overflow-hidden rounded-[26px] p-4 lg:p-5">
+    <div className="metric-card overflow-hidden rounded-[22px] p-3.5 sm:rounded-[24px] lg:p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{label}</div>
-          <div className="mt-3 font-display text-3xl font-semibold text-white">{value}</div>
+          <div className="mt-2.5 font-display text-[1.45rem] font-semibold text-white sm:text-[1.8rem]">{value}</div>
         </div>
         <div className={cx('rounded-2xl border p-3', TONE_CLASSES[tone] || TONE_CLASSES.slate)}>
           <IconComponent className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--text-soft)]">{detail}</p>
+      <p className="mt-3 text-xs leading-5 text-[var(--text-soft)]">{detail}</p>
     </div>
   );
 }
 
 function Panel({ eyebrow, title, subtitle, action, children, className = '' }) {
   return (
-    <section className={cx('panel-surface rounded-[28px] p-5 lg:p-6', className)}>
+    <section className={cx('panel-surface rounded-[22px] p-3.5 sm:rounded-[24px] sm:p-4 lg:p-5', className)}>
       {(eyebrow || title || subtitle || action) && (
-        <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             {eyebrow ? <div className="text-[10px] uppercase tracking-[0.34em] text-[var(--text-muted)]">{eyebrow}</div> : null}
-            {title ? <h2 className="mt-2 font-display text-2xl font-semibold text-white">{title}</h2> : null}
+            {title ? <h2 className="mt-1.5 font-display text-[1.05rem] font-semibold text-white sm:text-[1.25rem]">{title}</h2> : null}
             {subtitle ? <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--text-soft)]">{subtitle}</p> : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
@@ -260,19 +343,35 @@ function Panel({ eyebrow, title, subtitle, action, children, className = '' }) {
 
 function InfoRow({ label, value, emphasis = false }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/6 bg-black/10 px-4 py-3">
-      <span className="text-sm text-[var(--text-muted)]">{label}</span>
-      <span className={cx('text-right text-sm', emphasis ? 'font-semibold text-white' : 'text-[var(--text-soft)]')}>{value}</span>
+    <div className="flex flex-col gap-1.5 rounded-2xl border border-white/6 bg-black/10 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <span className="text-[13px] text-[var(--text-muted)]">{label}</span>
+      <span className={cx('text-left text-[13px] sm:text-right', emphasis ? 'font-semibold text-white' : 'text-[var(--text-soft)]')}>{value}</span>
     </div>
   );
 }
 
 function EmptyState({ title, description }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-white/10 bg-black/10 px-5 py-10 text-center">
-      <div className="font-display text-xl font-semibold text-white">{title}</div>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--text-soft)]">{description}</p>
+    <div className="rounded-[20px] border border-dashed border-white/10 bg-black/10 px-4 py-6 text-center sm:rounded-[22px] sm:px-5 sm:py-7">
+      <div className="font-display text-base font-semibold text-white sm:text-lg">{title}</div>
+      <p className="mx-auto mt-2 max-w-md text-[13px] leading-5 text-[var(--text-soft)]">{description}</p>
     </div>
+  );
+}
+
+function DetailToggle({ expanded, onClick, className = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-[var(--text-soft)] transition hover:border-white/18 hover:bg-white/8 hover:text-white',
+        className
+      )}
+    >
+      {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      {expanded ? 'Thu gọn' : 'Xem thêm'}
+    </button>
   );
 }
 
@@ -301,7 +400,7 @@ function LoginScreen({ loginUser, setLoginUser, loginPass, setLoginPass, loginEr
           <section className="panel-strong hidden rounded-[34px] p-8 lg:flex lg:flex-col lg:justify-between xl:p-10">
             <div>
               <StatusPill tone="sky" icon={Zap}>Trạm điều phối nội dung</StatusPill>
-              <h1 className="mt-6 max-w-3xl font-display text-5xl font-semibold leading-tight text-white">
+              <h1 className="mt-6 max-w-3xl font-display text-[1.9rem] font-semibold leading-tight text-white xl:text-[2.5rem]">
                 Quản lý chiến dịch, lịch đăng và phản hồi Facebook trong một nơi.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--text-soft)]">
@@ -320,7 +419,7 @@ function LoginScreen({ loginUser, setLoginUser, loginPass, setLoginPass, loginEr
             </div>
             <div className="mt-6">
               <div className="text-[11px] uppercase tracking-[0.32em] text-[var(--text-muted)]">Đăng nhập vận hành</div>
-              <h2 className="mt-3 font-display text-3xl font-semibold text-white">Vào trạm điều phối</h2>
+              <h2 className="mt-3 font-display text-[1.55rem] font-semibold text-white sm:text-[1.7rem]">Vào trạm điều phối</h2>
               <p className="mt-3 text-sm leading-7 text-[var(--text-soft)]">Dùng tài khoản quản trị hoặc vận hành để bắt đầu.</p>
             </div>
             <form onSubmit={handleLogin} className="mt-8 space-y-4">
@@ -349,6 +448,7 @@ function App() {
   const [campaigns, setCampaigns] = useState([]);
   const [videos, setVideos] = useState([]);
   const [interactions, setInteractions] = useState([]);
+  const [messageLogs, setMessageLogs] = useState([]);
   const [systemInfo, setSystemInfo] = useState(null);
   const [formData, setFormData] = useState({ name: '', source_url: '', auto_post: false, target_page_id: '', schedule_interval: 30 });
   const [fbPages, setFbPages] = useState([]);
@@ -377,18 +477,23 @@ function App() {
   const [users, setUsers] = useState([]);
   const [runtimeConfig, setRuntimeConfig] = useState(null);
   const [runtimeForm, setRuntimeForm] = useState(DEFAULT_RUNTIME_FORM);
+  const [replyAutomationDrafts, setReplyAutomationDrafts] = useState({});
   const [userForm, setUserForm] = useState({ username: '', display_name: '', password: '', role: 'operator' });
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '' });
   const [activeSection, setActiveSection] = useState(localStorage.getItem('dashboard-active-section') || 'overview');
   const [taskPage, setTaskPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState({});
+  const [showAllMetrics, setShowAllMetrics] = useState(false);
 
   const isAdmin = currentUser?.role === 'admin';
   const staleWorkers = workers.filter((worker) => !worker.is_online);
   const onlineWorkers = workers.filter((worker) => worker.is_online).length;
   const currentSection = NAV_ITEMS.find((item) => item.id === activeSection) || NAV_ITEMS[0];
   const warningCount = systemInfo?.warnings?.length || 0;
-  const invalidPages = fbPages.filter((pageItem) => pageItem.token_kind !== 'page_access_token');
+  const invalidPages = fbPages.filter((pageItem) => getResolvedPageTokenKind(pageItem, pageChecks[pageItem.page_id]) !== 'page_access_token');
+  const connectedMessagePages = fbPages.filter((pageItem) => pageChecks[pageItem.page_id]?.messenger_connection?.connected).length;
   const focusCampaigns = campaigns.filter((campaign) => campaign.last_sync_status === 'failed' || campaign.video_counts?.failed > 0).slice(0, 3);
   const runtimeSettings = runtimeConfig?.settings || {};
   const runtimeDerived = runtimeConfig?.derived || {};
@@ -396,6 +501,7 @@ function App() {
   const pagedTasks = tasks.slice((taskPage - 1) * TASK_PAGE_SIZE, taskPage * TASK_PAGE_SIZE);
   const totalEventPages = Math.max(1, Math.ceil(events.length / SYSTEM_EVENT_PAGE_SIZE));
   const pagedEvents = events.slice((eventPage - 1) * SYSTEM_EVENT_PAGE_SIZE, eventPage * SYSTEM_EVENT_PAGE_SIZE);
+  const toggleExpandedItem = (key) => setExpandedItems((current) => ({ ...current, [key]: !current[key] }));
 
   const authFetch = async (url, options = {}) => {
     if (sessionExpiresAt && new Date(sessionExpiresAt).getTime() <= Date.now()) {
@@ -442,12 +548,13 @@ function App() {
       if (filters.status !== 'all') params.set('status', filters.status);
       if (filters.campaignId !== 'all') params.set('campaign_id', filters.campaignId);
 
-      const [campaignsData, statsData, videosData, fbData, logsData, systemData, healthData, taskData, eventData, workerData, userData] = await Promise.all([
+      const [campaignsData, statsData, videosData, fbData, logsData, messageLogsData, systemData, healthData, taskData, eventData, workerData, userData] = await Promise.all([
         requestJson(`${API_URL}/campaigns/`),
         requestJson(`${API_URL}/campaigns/stats`),
         requestJson(`${API_URL}/campaigns/videos?${params.toString()}`),
         requestJson(`${API_URL}/facebook/config`),
         requestJson(`${API_URL}/webhooks/logs`),
+        requestJson(`${API_URL}/webhooks/messages`),
         requestJson(`${API_URL}/system/overview`),
         requestJson(`${API_URL}/system/health`),
         requestJson(`${API_URL}/system/tasks?limit=${TASK_FETCH_LIMIT}`),
@@ -463,6 +570,7 @@ function App() {
       setTotalPages(videosData.pages);
       setFbPages(fbData);
       setInteractions(logsData);
+      setMessageLogs(messageLogsData);
       setSystemInfo(systemData);
       setHealthInfo(healthData);
       setTasks(taskData.tasks || []);
@@ -525,6 +633,16 @@ function App() {
   }, [fbPages, formData.target_page_id]);
 
   useEffect(() => {
+    setReplyAutomationDrafts((current) => {
+      const next = {};
+      fbPages.forEach((pageItem) => {
+        next[pageItem.page_id] = current[pageItem.page_id] || buildReplyAutomationDraft(pageItem);
+      });
+      return next;
+    });
+  }, [fbPages]);
+
+  useEffect(() => {
     if (filters.campaignId === 'all') return;
     const exists = campaigns.some((campaign) => campaign.id === filters.campaignId);
     if (!exists) setFilters((current) => ({ ...current, campaignId: 'all' }));
@@ -581,6 +699,7 @@ function App() {
 
   const handleSectionChange = (sectionId) => {
     setActiveSection(sectionId);
+    setIsMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -603,28 +722,137 @@ function App() {
 
   const handleFbSubmit = async (event) => {
     event.preventDefault();
-    await runAction('save-page', async () => {
-      const payload = await requestJson(`${API_URL}/facebook/config`, {
+    const payload = await runAction('save-page', async () => {
+      const response = await requestJson(`${API_URL}/facebook/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fbForm),
       });
       setFbForm({ page_id: '', page_name: '', long_lived_access_token: '' });
-      return payload;
+      return response;
     });
+    if (payload?.page?.page_id && payload?.validation) {
+      setPageChecks((current) => ({
+        ...current,
+        [payload.page.page_id]: buildPageCheckSnapshot(payload),
+      }));
+    }
   };
 
   const handleValidatePage = async (pageId) => {
     setBusy(`page-validate-${pageId}`, true);
     try {
       const payload = await requestJson(`${API_URL}/facebook/config/${pageId}/validate`);
-      setPageChecks((current) => ({ ...current, [pageId]: { ...payload, checked_at: new Date().toISOString() } }));
+      setPageChecks((current) => ({ ...current, [pageId]: buildPageCheckSnapshot({ validation: payload, messenger_connection: payload.messenger_connection }) }));
       showNotice('success', payload.message);
     } catch (error) {
       setPageChecks((current) => ({ ...current, [pageId]: { ok: false, message: error.message, checked_at: new Date().toISOString() } }));
       showNotice('error', error.message);
     } finally {
       setBusy(`page-validate-${pageId}`, false);
+    }
+  };
+
+  const handleSubscribeMessages = async (pageId) => {
+    setBusy(`page-subscribe-${pageId}`, true);
+    try {
+      const payload = await requestJson(`${API_URL}/facebook/config/${pageId}/subscribe-messages`, {
+        method: 'POST',
+      });
+      setPageChecks((current) => ({
+        ...current,
+        [pageId]: buildPageCheckSnapshot(payload),
+      }));
+      showNotice('success', payload.message);
+      await fetchDashboard();
+    } catch (error) {
+      showNotice('error', error.message);
+    } finally {
+      setBusy(`page-subscribe-${pageId}`, false);
+    }
+  };
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!token || fbPages.length === 0) return;
+
+    const missingPageIds = fbPages
+      .map((pageItem) => pageItem.page_id)
+      .filter((pageId) => !pageChecks[pageId] && !actionState[`page-validate-${pageId}`]);
+
+    if (missingPageIds.length === 0) return;
+
+    let cancelled = false;
+    const hydrateChecks = async () => {
+      const results = await Promise.allSettled(
+        missingPageIds.map((pageId) => requestJson(`${API_URL}/facebook/config/${pageId}/validate`)),
+      );
+
+      if (cancelled) return;
+
+      setPageChecks((current) => {
+        const next = { ...current };
+        results.forEach((result, index) => {
+          const pageId = missingPageIds[index];
+          if (result.status === 'fulfilled') {
+            next[pageId] = buildPageCheckSnapshot({
+              validation: result.value,
+              messenger_connection: result.value.messenger_connection,
+            });
+          } else {
+            next[pageId] = {
+              ok: false,
+              message: result.reason?.message || 'Không thể kiểm tra fanpage.',
+              checked_at: new Date().toISOString(),
+            };
+          }
+        });
+        return next;
+      });
+    };
+
+    hydrateChecks();
+    return () => {
+      cancelled = true;
+    };
+  }, [fbPages, pageChecks, token, actionState]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  const handleReplyAutomationDraftChange = (pageId, key, value) => {
+    setReplyAutomationDrafts((current) => ({
+      ...current,
+      [pageId]: {
+        ...(current[pageId] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const handleReplyAutomationReset = (pageItem) => {
+    setReplyAutomationDrafts((current) => ({
+      ...current,
+      [pageItem.page_id]: buildReplyAutomationDraft(pageItem),
+    }));
+  };
+
+  const handleReplyAutomationSave = async (pageId) => {
+    const draft = replyAutomationDrafts[pageId];
+    if (!draft) {
+      showNotice('error', 'Không tìm thấy cấu hình fanpage để lưu.');
+      return;
+    }
+
+    const payload = await runAction(`reply-automation-${pageId}`, () => requestJson(`${API_URL}/facebook/config/${pageId}/automation`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    }));
+
+    if (payload?.page) {
+      setReplyAutomationDrafts((current) => ({
+        ...current,
+        [pageId]: buildReplyAutomationDraft(payload.page),
+      }));
     }
   };
 
@@ -774,6 +1002,12 @@ function App() {
     if (payload?.temporary_password) showNotice('success', `${payload.message} Mật khẩu tạm: ${payload.temporary_password}`);
   };
 
+  const handleDeleteUser = async (userId, username) => {
+    const confirmed = window.confirm(`Xóa vĩnh viễn tài khoản @${username}? Thao tác này không thể hoàn tác.`);
+    if (!confirmed) return;
+    await runAction(`user-delete-${userId}`, () => requestJson(`${API_URL}/users/${userId}`, { method: 'DELETE' }));
+  };
+
   const handleCleanupWorkers = async () => {
     if (staleWorkers.length === 0) {
       showNotice('success', 'Không có worker mất kết nối nào để dọn.');
@@ -885,7 +1119,9 @@ function App() {
             <EmptyState title="Chưa có fanpage nào" description="Thêm fanpage để bắt đầu." />
           ) : (
             fbPages.map((pageItem) => {
-              const tokenMeta = getPageTokenMeta(pageItem.token_kind);
+              const validation = pageChecks[pageItem.page_id];
+              const tokenMeta = getPageTokenMeta(getResolvedPageTokenKind(pageItem, validation));
+              const messengerMeta = getMessengerConnectionMeta(validation);
               return (
                 <div key={pageItem.page_id} className="rounded-[24px] border border-white/8 bg-black/10 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -893,9 +1129,13 @@ function App() {
                       <div className="font-medium text-white">{pageItem.page_name}</div>
                       <div className="mt-1 text-xs text-[var(--text-muted)]">{pageItem.page_id}</div>
                     </div>
-                    <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
+                      <StatusPill tone={messengerMeta.tone}>{messengerMeta.label}</StatusPill>
+                    </div>
                   </div>
                   <div className="mt-3 text-sm text-[var(--text-soft)]">{pageItem.token_preview || 'Chưa có token để hiển thị.'}</div>
+                  <div className="mt-2 text-xs text-[var(--text-muted)]">{messengerMeta.detail}</div>
                 </div>
               );
             })
@@ -1024,27 +1264,41 @@ function App() {
           ) : (
             fbPages.map((pageItem) => {
               const validation = pageChecks[pageItem.page_id];
-              const tokenMeta = getPageTokenMeta(pageItem.token_kind);
+              const tokenMeta = getPageTokenMeta(getResolvedPageTokenKind(pageItem, validation));
+              const messengerMeta = getMessengerConnectionMeta(validation);
               return (
                 <div key={pageItem.page_id} className="rounded-[24px] border border-white/8 bg-black/10 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium text-white">{pageItem.page_name}</div>
                       <div className="mt-1 text-xs text-[var(--text-muted)]">{pageItem.page_id}</div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
+                        <StatusPill tone={messengerMeta.tone}>{messengerMeta.label}</StatusPill>
+                      </div>
                     </div>
-                    <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
                   </div>
                   <div className="mt-3 text-sm text-[var(--text-soft)]">{pageItem.token_preview || 'Chưa có token để hiển thị.'}</div>
+                  <div className="mt-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3 text-sm text-[var(--text-soft)]">{messengerMeta.detail}</div>
                   {validation ? (
                     <div className={cx('mt-3 rounded-2xl border px-3 py-3 text-sm', validation.ok ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-rose-400/20 bg-rose-400/10 text-rose-100')}>
                       <div>{validation.message}</div>
                       <div className="mt-1 text-xs opacity-80">Kiểm tra lúc {formatDateTime(validation.checked_at)}</div>
                     </div>
                   ) : null}
-                  <div className="mt-4 flex justify-end">
+                  <div className="mobile-action-stack mt-4 sm:justify-end">
+                    <button
+                      type="button"
+                      className={BUTTON_GHOST}
+                      onClick={() => handleSubscribeMessages(pageItem.page_id)}
+                      disabled={actionState[`page-subscribe-${pageItem.page_id}`]}
+                    >
+                      <MessagesSquare className="h-4 w-4" />
+                          {actionState[`page-subscribe-${pageItem.page_id}`] ? 'Đang đăng ký...' : 'Đăng ký webhook'}
+                    </button>
                     <button type="button" className={BUTTON_SECONDARY} onClick={() => handleValidatePage(pageItem.page_id)} disabled={actionState[`page-validate-${pageItem.page_id}`]}>
                       <ShieldCheck className="h-4 w-4" />
-                      {actionState[`page-validate-${pageItem.page_id}`] ? 'Đang kiểm tra...' : 'Xác minh token'}
+                      {actionState[`page-validate-${pageItem.page_id}`] ? 'Đang kiểm tra...' : 'Xác minh & kiểm tra'}
                     </button>
                   </div>
                 </div>
@@ -1061,11 +1315,12 @@ function App() {
           <div className="grid gap-4 xl:grid-cols-2">
             {campaigns.map((campaign) => {
               const syncMeta = getSyncStateMeta(campaign.last_sync_status);
+              const isExpanded = !!expandedItems[`campaign:${campaign.id}`];
               return (
-                <article key={campaign.id} className="rounded-[26px] border border-white/8 bg-black/10 p-5">
+                <article key={campaign.id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-display text-2xl font-semibold text-white">{campaign.name}</div>
+                      <div className="font-display text-lg font-semibold text-white sm:text-[1.15rem]">{campaign.name}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium', getStatusClasses(campaign.status))}>
                           <StatusIcon status={campaign.status} />
@@ -1082,46 +1337,56 @@ function App() {
                       <div className="mt-2 text-sm font-medium text-white">{campaign.target_page_name || campaign.target_page_id || 'Chưa gắn'}</div>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-[22px] border border-white/8 bg-black/10 px-4 py-3">
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                      <CloudDownload className="h-3.5 w-3.5" />
-                      Nguồn crawl
-                    </div>
-                    <a href={campaign.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 break-all text-sm text-cyan-100 hover:text-white">
-                      {campaign.source_url}
-                      <ExternalLink className="h-4 w-4 shrink-0" />
-                    </a>
+                  <div className="mt-3 text-sm text-[var(--text-soft)]">
+                    {(campaign.video_counts?.total ?? 0)} video • {(campaign.video_counts?.ready ?? 0)} sẵn sàng • {campaign.schedule_interval || 0} phút/lần
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <InfoRow label="Tổng video" value={campaign.video_counts?.total ?? 0} emphasis />
-                    <InfoRow label="Sẵn sàng" value={campaign.video_counts?.ready ?? 0} />
-                    <InfoRow label="Thất bại" value={campaign.video_counts?.failed ?? 0} />
-                    <InfoRow label="Khoảng cách" value={`${campaign.schedule_interval || 0} phút`} />
-                    <InfoRow label="Tự đăng" value={campaign.auto_post ? 'Đang bật' : 'Đang tắt'} />
-                    <InfoRow label="Lần sync gần nhất" value={formatDateTime(campaign.last_synced_at)} />
+                  <div className="mt-3 flex justify-start">
+                    <DetailToggle expanded={isExpanded} onClick={() => toggleExpandedItem(`campaign:${campaign.id}`)} />
                   </div>
-                  {campaign.last_sync_error ? <div className="mt-4 rounded-[22px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm leading-7 text-rose-100">{campaign.last_sync_error}</div> : null}
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <button type="button" className={BUTTON_SECONDARY} onClick={() => handleCampaignAction(campaign, 'sync')} disabled={actionState[`campaign-${campaign.id}-sync`]}>
-                      <RefreshCw className={cx('h-4 w-4', actionState[`campaign-${campaign.id}-sync`] ? 'animate-spin' : '')} />
-                      Đồng bộ lại
-                    </button>
-                    {campaign.status === 'active' ? (
-                      <button type="button" className={BUTTON_GHOST} onClick={() => handleCampaignAction(campaign, 'pause')} disabled={actionState[`campaign-${campaign.id}-pause`]}>
-                        <Pause className="h-4 w-4" />
-                        Tạm dừng
-                      </button>
-                    ) : (
-                      <button type="button" className={BUTTON_GHOST} onClick={() => handleCampaignAction(campaign, 'resume')} disabled={actionState[`campaign-${campaign.id}-resume`]}>
-                        <Play className="h-4 w-4" />
-                        Kích hoạt lại
-                      </button>
-                    )}
-                    <button type="button" className={cx(BUTTON_GHOST, 'text-rose-100')} onClick={() => handleCampaignAction(campaign, 'delete')} disabled={actionState[`campaign-${campaign.id}-delete`]}>
-                      <Trash2 className="h-4 w-4" />
-                      Xóa chiến dịch
-                    </button>
-                  </div>
+                  {isExpanded ? (
+                    <>
+                      <div className="mt-4 rounded-[22px] border border-white/8 bg-black/10 px-4 py-3">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                          <CloudDownload className="h-3.5 w-3.5" />
+                          Nguồn crawl
+                        </div>
+                        <a href={campaign.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 break-all text-sm text-cyan-100 hover:text-white">
+                          {campaign.source_url}
+                          <ExternalLink className="h-4 w-4 shrink-0" />
+                        </a>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <InfoRow label="Tổng video" value={campaign.video_counts?.total ?? 0} emphasis />
+                        <InfoRow label="Sẵn sàng" value={campaign.video_counts?.ready ?? 0} />
+                        <InfoRow label="Thất bại" value={campaign.video_counts?.failed ?? 0} />
+                        <InfoRow label="Khoảng cách" value={`${campaign.schedule_interval || 0} phút`} />
+                        <InfoRow label="Tự đăng" value={campaign.auto_post ? 'Đang bật' : 'Đang tắt'} />
+                        <InfoRow label="Lần sync gần nhất" value={formatDateTime(campaign.last_synced_at)} />
+                      </div>
+                      {campaign.last_sync_error ? <div className="mt-4 rounded-[22px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm leading-7 text-rose-100">{campaign.last_sync_error}</div> : null}
+                      <div className="mobile-action-stack mt-5">
+                        <button type="button" className={BUTTON_SECONDARY} onClick={() => handleCampaignAction(campaign, 'sync')} disabled={actionState[`campaign-${campaign.id}-sync`]}>
+                          <RefreshCw className={cx('h-4 w-4', actionState[`campaign-${campaign.id}-sync`] ? 'animate-spin' : '')} />
+                          Đồng bộ lại
+                        </button>
+                        {campaign.status === 'active' ? (
+                          <button type="button" className={BUTTON_GHOST} onClick={() => handleCampaignAction(campaign, 'pause')} disabled={actionState[`campaign-${campaign.id}-pause`]}>
+                            <Pause className="h-4 w-4" />
+                            Tạm dừng
+                          </button>
+                        ) : (
+                          <button type="button" className={BUTTON_GHOST} onClick={() => handleCampaignAction(campaign, 'resume')} disabled={actionState[`campaign-${campaign.id}-resume`]}>
+                            <Play className="h-4 w-4" />
+                            Kích hoạt lại
+                          </button>
+                        )}
+                        <button type="button" className={cx(BUTTON_GHOST, 'text-rose-100')} onClick={() => handleCampaignAction(campaign, 'delete')} disabled={actionState[`campaign-${campaign.id}-delete`]}>
+                          <Trash2 className="h-4 w-4" />
+                          Xóa chiến dịch
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
                 </article>
               );
             })}
@@ -1169,69 +1434,80 @@ function App() {
           <EmptyState title="Không có video phù hợp bộ lọc" description="Thử đổi bộ lọc." />
         ) : (
           <div className="space-y-4">
-            {videos.map((video) => (
-              <article key={video.id} className="rounded-[28px] border border-white/8 bg-black/10 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{video.campaign_name || 'Chưa rõ chiến dịch'}</div>
-                    <div className="mt-2 font-display text-2xl font-semibold text-white">{video.original_id}</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium', getStatusClasses(video.status))}>
-                        <StatusIcon status={video.status} />
-                        {getStatusLabel(video.status)}
-                      </span>
-                      <StatusPill tone={video.target_page_name ? 'sky' : 'amber'} icon={Globe2}>{video.target_page_name || video.target_page_id || 'Chưa gắn fanpage'}</StatusPill>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <InfoRow label="Lịch đăng" value={formatDateTime(video.publish_time)} emphasis />
-                    <InfoRow label="Số lần retry" value={video.retry_count ?? 0} />
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
-                  <div className="space-y-4">
-                    <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                        <CloudDownload className="h-3.5 w-3.5" />
-                        Nguồn video
+            {videos.map((video) => {
+              const isExpanded = !!expandedItems[`video:${video.id}`];
+              return (
+                <article key={video.id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">{video.campaign_name || 'Chưa rõ chiến dịch'}</div>
+                      <div className="mt-2 font-display text-base font-semibold text-white sm:text-[1.05rem]">{video.original_id}</div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium', getStatusClasses(video.status))}>
+                          <StatusIcon status={video.status} />
+                          {getStatusLabel(video.status)}
+                        </span>
+                        <StatusPill tone={video.target_page_name ? 'sky' : 'amber'} icon={Globe2}>{video.target_page_name || video.target_page_id || 'Chưa gắn fanpage'}</StatusPill>
                       </div>
-                      {video.source_video_url ? (
-                        <a href={video.source_video_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 break-all text-sm text-cyan-100 hover:text-white">
-                          {video.source_video_url}
-                          <ExternalLink className="h-4 w-4 shrink-0" />
-                        </a>
-                      ) : <div className="mt-3 text-sm text-[var(--text-soft)]">Chưa có đường dẫn nguồn.</div>}
                     </div>
-                    <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
-                      <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Caption gốc</div>
-                      <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--text-soft)]">{video.original_caption || 'Chưa có caption gốc từ nguồn.'}</div>
-                    </div>
-                    {video.last_error ? <div className="rounded-[24px] border border-rose-400/20 bg-rose-400/10 p-4 text-sm leading-7 text-rose-100">{video.last_error}</div> : null}
-                  </div>
-                  <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
-                    <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Caption AI có thể chỉnh tay</div>
-                    <textarea className={cx(FIELD_CLASS, 'mt-4 min-h-[220px] resize-y')} value={captionDrafts[video.id] ?? ''} onChange={(event) => handleCaptionChange(video.id, event.target.value)} placeholder="Chú thích AI sẽ xuất hiện ở đây..." />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {video.status === 'ready' ? <button type="button" className={BUTTON_SECONDARY} onClick={() => handlePrioritize(video.id)} disabled={actionState[`video-${video.id}`]}><Play className="h-4 w-4" />{actionState[`video-${video.id}`] ? 'Đang ưu tiên...' : 'Đẩy lên đầu hàng chờ'}</button> : null}
-                      {video.status === 'failed' ? <button type="button" className={BUTTON_SECONDARY} onClick={() => handleRetryVideo(video.id)} disabled={actionState[`video-retry-${video.id}`]}><RefreshCw className="h-4 w-4" />{actionState[`video-retry-${video.id}`] ? 'Đang retry...' : 'Retry video'}</button> : null}
-                      <button type="button" className={BUTTON_GHOST} onClick={() => handleRegenerateCaption(video.id)} disabled={actionState[`video-generate-${video.id}`]}>
-                        <Zap className="h-4 w-4" />
-                        {actionState[`video-generate-${video.id}`] ? 'Đang tạo lại...' : 'Tạo lại caption'}
-                      </button>
-                      <button type="button" className={BUTTON_PRIMARY} onClick={() => handleSaveCaption(video.id)} disabled={actionState[`video-caption-${video.id}`]}>
-                        <CircleCheck className="h-4 w-4" />
-                        {actionState[`video-caption-${video.id}`] ? 'Đang lưu...' : 'Lưu caption'}
-                      </button>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <InfoRow label="Lịch đăng" value={formatDateTime(video.publish_time)} emphasis />
+                      <InfoRow label="Số lần retry" value={video.retry_count ?? 0} />
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                  <div className="mt-3 text-sm text-[var(--text-soft)]">
+                    {summarizeText(captionDrafts[video.id] ?? video.ai_caption ?? video.original_caption, 'Chưa có caption để xem nhanh.')}
+                  </div>
+                  <div className="mt-3 flex justify-start">
+                    <DetailToggle expanded={isExpanded} onClick={() => toggleExpandedItem(`video:${video.id}`)} />
+                  </div>
+                  {isExpanded ? (
+                    <div className="mt-5 grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
+                      <div className="space-y-4">
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                            <CloudDownload className="h-3.5 w-3.5" />
+                            Nguồn video
+                          </div>
+                          {video.source_video_url ? (
+                            <a href={video.source_video_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 break-all text-sm text-cyan-100 hover:text-white">
+                              {video.source_video_url}
+                              <ExternalLink className="h-4 w-4 shrink-0" />
+                            </a>
+                          ) : <div className="mt-3 text-sm text-[var(--text-soft)]">Chưa có đường dẫn nguồn.</div>}
+                        </div>
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Caption gốc</div>
+                          <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--text-soft)]">{video.original_caption || 'Chưa có caption gốc từ nguồn.'}</div>
+                        </div>
+                        {video.last_error ? <div className="rounded-[24px] border border-rose-400/20 bg-rose-400/10 p-4 text-sm leading-7 text-rose-100">{video.last_error}</div> : null}
+                      </div>
+                      <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                        <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Caption AI có thể chỉnh tay</div>
+                        <textarea className={cx(FIELD_CLASS, 'mt-4 min-h-[220px] resize-y')} value={captionDrafts[video.id] ?? ''} onChange={(event) => handleCaptionChange(video.id, event.target.value)} placeholder="Chú thích AI sẽ xuất hiện ở đây..." />
+                        <div className="mobile-action-stack mt-4">
+                          {video.status === 'ready' ? <button type="button" className={BUTTON_SECONDARY} onClick={() => handlePrioritize(video.id)} disabled={actionState[`video-${video.id}`]}><Play className="h-4 w-4" />{actionState[`video-${video.id}`] ? 'Đang ưu tiên...' : 'Đẩy lên đầu hàng chờ'}</button> : null}
+                          {video.status === 'failed' ? <button type="button" className={BUTTON_SECONDARY} onClick={() => handleRetryVideo(video.id)} disabled={actionState[`video-retry-${video.id}`]}><RefreshCw className="h-4 w-4" />{actionState[`video-retry-${video.id}`] ? 'Đang retry...' : 'Retry video'}</button> : null}
+                          <button type="button" className={BUTTON_GHOST} onClick={() => handleRegenerateCaption(video.id)} disabled={actionState[`video-generate-${video.id}`]}>
+                            <Zap className="h-4 w-4" />
+                            {actionState[`video-generate-${video.id}`] ? 'Đang tạo lại...' : 'Tạo lại caption'}
+                          </button>
+                          <button type="button" className={BUTTON_PRIMARY} onClick={() => handleSaveCaption(video.id)} disabled={actionState[`video-caption-${video.id}`]}>
+                            <CircleCheck className="h-4 w-4" />
+                            {actionState[`video-caption-${video.id}`] ? 'Đang lưu...' : 'Lưu caption'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         )}
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-5">
           <div className="text-sm text-[var(--text-soft)]">Đang xem {videos.length} video ở trang {page}.</div>
-          <div className="flex gap-2">
+          <div className="mobile-action-stack sm:justify-end">
             <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className={BUTTON_GHOST}>Trước</button>
             <button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className={BUTTON_GHOST}>Sau</button>
           </div>
@@ -1244,7 +1520,7 @@ function App() {
     <div className="space-y-6">
       <Panel eyebrow="Luồng bình luận" title="Phản hồi Facebook theo từng tình huống">
         <div className="grid gap-4 lg:grid-cols-3">
-          <InfoRow label="Bình luận đang chờ" value={systemInfo?.pending_replies ?? 0} emphasis />
+          <InfoRow label="Bình luận đang chờ" value={systemInfo?.pending_comment_replies ?? 0} emphasis />
           <InfoRow label="Tổng mục đang hiển thị" value={interactions.length} />
           <InfoRow label="Trang đã kết nối" value={stats.connected_pages ?? 0} />
         </div>
@@ -1256,8 +1532,9 @@ function App() {
           <div className="space-y-4">
             {interactions.map((log) => {
               const targetPage = fbPages.find((pageItem) => pageItem.page_id === log.page_id);
+              const isExpanded = !!expandedItems[`comment:${log.id}`];
               return (
-                <article key={log.id} className="rounded-[28px] border border-white/8 bg-black/10 p-5">
+                <article key={log.id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <div className="font-medium text-white">{targetPage?.page_name || log.page_id}</div>
@@ -1271,16 +1548,22 @@ function App() {
                       <StatusPill tone="slate" icon={Clock}>{formatDateTime(log.created_at)}</StatusPill>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                    <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
-                      <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Tin nhắn người dùng</div>
-                      <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">{log.user_message}</div>
-                    </div>
-                    <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
-                      <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Phản hồi AI</div>
-                      <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--text-soft)]">{log.ai_reply || 'AI chưa tạo phản hồi cho mục này.'}</div>
-                    </div>
+                  <div className="mt-3 text-sm text-[var(--text-soft)]">{summarizeText(log.user_message, 'Chưa có bình luận.')}</div>
+                  <div className="mt-3 flex justify-start">
+                    <DetailToggle expanded={isExpanded} onClick={() => toggleExpandedItem(`comment:${log.id}`)} />
                   </div>
+                  {isExpanded ? (
+                    <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                        <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Tin nhắn người dùng</div>
+                        <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">{log.user_message}</div>
+                      </div>
+                      <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                        <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Phản hồi AI</div>
+                        <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--text-soft)]">{log.ai_reply || 'AI chưa tạo phản hồi cho mục này.'}</div>
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
               );
             })}
@@ -1289,6 +1572,240 @@ function App() {
       </Panel>
     </div>
   );
+
+  const renderMessagesSection = () => (
+    <div className="space-y-6">
+      <Panel eyebrow="Thiết lập theo fanpage" title="Prompt AI cho comment và inbox">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <InfoRow label="Inbox đang chờ" value={systemInfo?.pending_message_replies ?? 0} emphasis />
+          <InfoRow label="Fanpage bật inbox AI" value={systemInfo?.message_auto_reply_pages ?? 0} />
+          <InfoRow label="Webhook fanpage đã nối" value={`${connectedMessagePages}/${fbPages.length || 0}`} />
+        </div>
+      </Panel>
+
+      <Panel eyebrow="Prompt theo trang" title="Bật tắt và soạn quy tắc trả lời">
+        {fbPages.length === 0 ? (
+          <EmptyState title="Chưa có fanpage" description="Thêm fanpage trước khi cấu hình AI." />
+        ) : (
+          <div className="space-y-4">
+            {fbPages.map((pageItem) => {
+              const draft = replyAutomationDrafts[pageItem.page_id] || buildReplyAutomationDraft(pageItem);
+              const validation = pageChecks[pageItem.page_id];
+              const tokenMeta = getPageTokenMeta(getResolvedPageTokenKind(pageItem, validation));
+              const messengerMeta = getMessengerConnectionMeta(validation);
+              const isExpanded = !!expandedItems[`page-ai:${pageItem.page_id}`];
+
+              return (
+                <article key={pageItem.page_id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="font-display text-lg font-semibold text-white sm:text-[1.15rem]">{pageItem.page_name}</div>
+                      <div className="mt-1 text-xs text-[var(--text-muted)]">{pageItem.page_id}</div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
+                        <StatusPill tone={messengerMeta.tone}>{messengerMeta.label}</StatusPill>
+                        <StatusPill tone={draft.comment_auto_reply_enabled ? 'emerald' : 'slate'}>
+                          Comment: {draft.comment_auto_reply_enabled ? 'Bật' : 'Tắt'}
+                        </StatusPill>
+                        <StatusPill tone={draft.message_auto_reply_enabled ? 'emerald' : 'slate'}>
+                          Inbox: {draft.message_auto_reply_enabled ? 'Bật' : 'Tắt'}
+                        </StatusPill>
+                        <StatusPill tone={draft.message_reply_schedule_enabled ? 'sky' : 'slate'}>
+                          Giờ: {draft.message_reply_schedule_enabled ? `${draft.message_reply_start_time}-${draft.message_reply_end_time}` : 'Cả ngày'}
+                        </StatusPill>
+                        <StatusPill tone={draft.message_reply_cooldown_minutes > 0 ? 'amber' : 'slate'}>
+                          Cooldown: {draft.message_reply_cooldown_minutes > 0 ? `${draft.message_reply_cooldown_minutes} phút` : 'Tắt'}
+                        </StatusPill>
+                      </div>
+                      <div className="mt-3 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3 text-sm text-[var(--text-soft)]">
+                        {messengerMeta.detail}
+                      </div>
+                    </div>
+                    <div className="mobile-action-stack">
+                      <button
+                        type="button"
+                        className={BUTTON_GHOST}
+                        onClick={() => handleSubscribeMessages(pageItem.page_id)}
+                        disabled={actionState[`page-subscribe-${pageItem.page_id}`]}
+                      >
+                        <MessagesSquare className="h-4 w-4" />
+                    {actionState[`page-subscribe-${pageItem.page_id}`] ? 'Đang đăng ký...' : 'Đăng ký webhook'}
+                      </button>
+                      <button
+                        type="button"
+                        className={BUTTON_SECONDARY}
+                        onClick={() => handleValidatePage(pageItem.page_id)}
+                        disabled={actionState[`page-validate-${pageItem.page_id}`]}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        {actionState[`page-validate-${pageItem.page_id}`] ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+                      </button>
+                      <DetailToggle expanded={isExpanded} onClick={() => toggleExpandedItem(`page-ai:${pageItem.page_id}`)} />
+                    </div>
+                  </div>
+                  {isExpanded ? (
+                    <>
+                      <div className="mt-4 mobile-action-stack">
+                        <button type="button" className={BUTTON_GHOST} onClick={() => handleReplyAutomationReset(pageItem)}>
+                          Khôi phục
+                        </button>
+                        <button
+                          type="button"
+                          className={BUTTON_PRIMARY}
+                          onClick={() => handleReplyAutomationSave(pageItem.page_id)}
+                          disabled={actionState[`reply-automation-${pageItem.page_id}`]}
+                        >
+                          <Bot className="h-4 w-4" />
+                          {actionState[`reply-automation-${pageItem.page_id}`] ? 'Đang lưu...' : 'Lưu prompt AI'}
+                        </button>
+                      </div>
+                      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <label className="flex items-center justify-between gap-3 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3">
+                            <div>
+                              <div className="font-medium text-white">Tự động trả lời comment</div>
+                              <div className="mt-1 text-sm text-[var(--text-soft)]">Luồng bình luận hiện có.</div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={draft.comment_auto_reply_enabled}
+                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'comment_auto_reply_enabled', event.target.checked)}
+                            />
+                          </label>
+                          <div className="mt-4 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Prompt comment</div>
+                          <textarea
+                            className={cx(FIELD_CLASS, 'mt-3 min-h-[180px] resize-y')}
+                            value={draft.comment_ai_prompt}
+                            onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'comment_ai_prompt', event.target.value)}
+                            placeholder="Để trống nếu muốn dùng prompt mặc định cho comment."
+                          />
+                        </div>
+
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <label className="flex items-center justify-between gap-3 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3">
+                            <div>
+                              <div className="font-medium text-white">Tự động trả lời inbox</div>
+                              <div className="mt-1 text-sm text-[var(--text-soft)]">Luồng Messenger mới.</div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={draft.message_auto_reply_enabled}
+                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_auto_reply_enabled', event.target.checked)}
+                            />
+                          </label>
+                          <div className="mt-4 text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Prompt inbox</div>
+                          <textarea
+                            className={cx(FIELD_CLASS, 'mt-3 min-h-[180px] resize-y')}
+                            value={draft.message_ai_prompt}
+                            onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_ai_prompt', event.target.value)}
+                            placeholder="Để trống nếu muốn dùng prompt mặc định cho inbox."
+                          />
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <label className="space-y-2">
+                              <span className="flex items-center justify-between text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                                <span>Khung giờ</span>
+                                <input
+                                  type="checkbox"
+                                  checked={draft.message_reply_schedule_enabled}
+                                  onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_reply_schedule_enabled', event.target.checked)}
+                                />
+                              </span>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <input
+                                  type="time"
+                                  className={FIELD_CLASS}
+                                  value={draft.message_reply_start_time}
+                                  onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_reply_start_time', event.target.value)}
+                                  disabled={!draft.message_reply_schedule_enabled}
+                                />
+                                <input
+                                  type="time"
+                                  className={FIELD_CLASS}
+                                  value={draft.message_reply_end_time}
+                                  onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_reply_end_time', event.target.value)}
+                                  disabled={!draft.message_reply_schedule_enabled}
+                                />
+                              </div>
+                            </label>
+                            <label className="space-y-2">
+                              <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Cooldown cùng người gửi</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="1440"
+                                className={FIELD_CLASS}
+                                value={draft.message_reply_cooldown_minutes}
+                                onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'message_reply_cooldown_minutes', parseInt(event.target.value, 10) || 0)}
+                              />
+                              <div className="text-sm text-[var(--text-soft)]">Tính theo phút, giờ Việt Nam.</div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+
+      <Panel eyebrow="Nhật ký inbox" title="Tin nhắn fanpage gần nhất">
+        {messageLogs.length === 0 ? (
+          <EmptyState title="Chưa có tin nhắn inbox" description="Tin nhắn mới sẽ hiện tại đây." />
+        ) : (
+          <div className="space-y-4">
+            {messageLogs.map((log) => {
+              const targetPage = fbPages.find((pageItem) => pageItem.page_id === log.page_id);
+              const isExpanded = !!expandedItems[`message:${log.id}`];
+              return (
+                <article key={log.id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="font-medium text-white">{targetPage?.page_name || log.page_id}</div>
+                      <div className="mt-1 text-xs text-[var(--text-muted)]">Người gửi: {log.sender_id} • Tin nhắn: {log.facebook_message_id}</div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium', getStatusClasses(log.status))}>
+                        <StatusIcon status={log.status} />
+                        {getStatusLabel(log.status)}
+                      </span>
+                      <StatusPill tone="slate" icon={Clock}>{formatDateTime(log.created_at)}</StatusPill>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-sm text-[var(--text-soft)]">{summarizeText(log.user_message, 'Chưa có tin nhắn.')}</div>
+                  <div className="mt-3 flex justify-start">
+                    <DetailToggle expanded={isExpanded} onClick={() => toggleExpandedItem(`message:${log.id}`)} />
+                  </div>
+                  {isExpanded ? (
+                    <>
+                      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Tin nhắn khách hàng</div>
+                          <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">{log.user_message}</div>
+                        </div>
+                        <div className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                          <div className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Phản hồi AI</div>
+                          <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--text-soft)]">{log.ai_reply || 'AI chưa phản hồi cho mục này.'}</div>
+                        </div>
+                      </div>
+                      {log.last_error ? (
+                        <div className="mt-4 rounded-[24px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                          {log.last_error}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+
   const renderOperationsSection = () => (
     <div className="grid gap-6 2xl:grid-cols-12">
       <Panel className="2xl:col-span-4" eyebrow="Health" title="Sức khỏe hệ thống">
@@ -1490,7 +2007,7 @@ function App() {
             {users.length === 0 ? <EmptyState title="Chưa có thêm tài khoản" description="Tạo tài khoản để bắt đầu." /> : (
               <div className="grid gap-4 xl:grid-cols-2">
                 {users.map((user) => (
-                  <article key={user.id} className="rounded-[26px] border border-white/8 bg-black/10 p-5">
+                  <article key={user.id} className="rounded-[22px] border border-white/8 bg-black/10 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <div className="font-medium text-white">{user.display_name || user.username}</div>
@@ -1515,10 +2032,19 @@ function App() {
                         {user.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                       </button>
                     </div>
-                    <div className="mt-3">
+                    <div className="mobile-action-stack mt-3">
                       <button type="button" className={BUTTON_SECONDARY} onClick={() => handleResetUserPassword(user.id)} disabled={actionState[`user-reset-${user.id}`]}>
                         <RefreshCw className="h-4 w-4" />
                         {actionState[`user-reset-${user.id}`] ? 'Đang đặt lại...' : 'Đặt lại mật khẩu'}
+                      </button>
+                      <button
+                        type="button"
+                        className={cx(BUTTON_GHOST, 'border-rose-400/20 bg-rose-400/10 text-rose-100 hover:border-rose-400/30 hover:bg-rose-400/15')}
+                        onClick={() => handleDeleteUser(user.id, user.username)}
+                        disabled={actionState[`user-delete-${user.id}`] || currentUser?.id === user.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {actionState[`user-delete-${user.id}`] ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
                       </button>
                     </div>
                   </article>
@@ -1536,6 +2062,7 @@ function App() {
       case 'campaigns': return renderCampaignSection();
       case 'queue': return renderQueueSection();
       case 'engagement': return renderEngagementSection();
+      case 'messages': return renderMessagesSection();
       case 'operations': return renderOperationsSection();
       case 'security': return renderSecuritySection();
       case 'overview':
@@ -1543,38 +2070,133 @@ function App() {
     }
   };
 
+  const renderMobileQuickPanel = () => (
+    <Panel className="xl:hidden" eyebrow="Tóm tắt nhanh" title="Điểm cần nhìn ngay">
+      <div className="space-y-4">
+        <div className="grid gap-3">
+          <InfoRow label="Đến lượt kế tiếp" value={formatRelTime(stats.next_publish)} emphasis />
+          <InfoRow label="Cuối hàng chờ" value={formatDateTime(stats.queue_end)} />
+          <InfoRow label="Worker trực tuyến" value={onlineWorkers} />
+        </div>
+        <div className="grid gap-3">
+          <button type="button" onClick={() => handleSectionChange('campaigns')} className="rounded-[22px] border border-white/8 bg-black/10 px-4 py-4 text-left transition hover:border-cyan-400/20 hover:bg-cyan-400/6">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Chiến dịch</div>
+            <div className="mt-2 font-medium text-white">
+              {focusCampaigns.length ? `${focusCampaigns.length} chiến dịch cần xem ngay` : 'Không có chiến dịch nóng'}
+            </div>
+          </button>
+          <button type="button" onClick={() => handleSectionChange('messages')} className="rounded-[22px] border border-white/8 bg-black/10 px-4 py-4 text-left transition hover:border-cyan-400/20 hover:bg-cyan-400/6">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Webhook fanpage</div>
+            <div className="mt-2 font-medium text-white">{connectedMessagePages}/{fbPages.length || 0} trang đã nối đủ feed và messages</div>
+          </button>
+          <button type="button" onClick={() => handleSectionChange('operations')} className="rounded-[22px] border border-white/8 bg-black/10 px-4 py-4 text-left transition hover:border-cyan-400/20 hover:bg-cyan-400/6">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">Vận hành</div>
+            <div className="mt-2 font-medium text-white">
+              {staleWorkers.length ? `${staleWorkers.length} worker cần dọn` : 'Không có worker stale'}
+            </div>
+          </button>
+        </div>
+      </div>
+    </Panel>
+  );
+
   const metricCards = [
     { label: 'Chiến dịch đang chạy', value: stats.active_campaigns ?? 0, detail: `${stats.paused_campaigns ?? 0} chiến dịch đang tạm dừng`, icon: Share2, tone: 'emerald' },
     { label: 'Video sẵn sàng', value: stats.ready ?? 0, detail: stats.next_publish ? `Lượt gần nhất sẽ tới ${formatRelTime(stats.next_publish)}` : 'Chưa có video sẵn sàng đăng', icon: Clock, tone: 'amber' },
     { label: 'Fanpage kết nối', value: stats.connected_pages ?? 0, detail: invalidPages.length ? `${invalidPages.length} trang cần xem lại token` : 'Mọi fanpage đang ở trạng thái tốt', icon: Globe2, tone: invalidPages.length ? 'rose' : 'sky' },
+    {
+      label: 'Phản hồi chờ AI',
+      value: systemInfo?.pending_replies ?? 0,
+      detail: `${systemInfo?.pending_comment_replies ?? 0} comment • ${systemInfo?.pending_message_replies ?? 0} inbox`,
+      icon: Bot,
+      tone: 'sky',
+    },
     { label: 'Worker trực tuyến', value: onlineWorkers, detail: staleWorkers.length ? `${staleWorkers.length} worker stale cần dọn` : 'Không có worker mất kết nối', icon: Radio, tone: staleWorkers.length ? 'amber' : 'emerald' },
-    { label: 'Bình luận chờ AI', value: systemInfo?.pending_replies ?? 0, detail: `${taskSummary.processing ?? 0} tác vụ nền đang được xử lý`, icon: Bot, tone: 'sky' },
   ];
+  const visibleMetricCards = showAllMetrics ? metricCards : metricCards.slice(0, 4);
 
   if (!token) {
     return <LoginScreen loginUser={loginUser} setLoginUser={setLoginUser} loginPass={loginPass} setLoginPass={setLoginPass} loginError={loginError} handleLogin={handleLogin} />;
   }
 
   return (
-    <div className="relative h-screen overflow-y-auto overflow-x-hidden bg-[var(--shell-bg)] text-white">
+    <div className="relative min-h-screen overflow-x-hidden bg-[var(--shell-bg)] text-white">
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.10),transparent_26%)]" />
       </div>
-      <div className="relative flex min-h-screen flex-col lg:flex-row">
-        <aside className="hidden w-[19rem] shrink-0 border-r border-white/8 bg-black/15 px-5 py-6 backdrop-blur-2xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto">
+      {isMobileNavOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button type="button" aria-label="Đóng menu" className="absolute inset-0 bg-[#010d24]/70 backdrop-blur-sm" onClick={() => setIsMobileNavOpen(false)} />
+          <div className="mobile-sheet absolute inset-x-3 bottom-3 top-3 rounded-[30px] border border-white/10 bg-[rgba(2,28,68,0.96)] p-4 shadow-[0_24px_80px_rgba(0,9,24,0.52)]">
+            <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.28em] text-[var(--text-muted)]">Điều hướng</div>
+                <div className="mt-1 font-display text-xl font-semibold text-white">Các khu vực làm việc</div>
+              </div>
+              <button type="button" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white" onClick={() => setIsMobileNavOpen(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 overflow-y-auto">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const count = {
+                  overview: warningCount,
+                  campaigns: campaigns.length,
+                  queue: stats.ready ?? 0,
+                  engagement: systemInfo?.pending_comment_replies ?? 0,
+                  messages: systemInfo?.pending_message_replies ?? 0,
+                  operations: taskSummary.failed ?? 0,
+                  security: users.length || (currentUser ? 1 : 0),
+                }[item.id];
+                return (
+                  <button key={item.id} type="button" onClick={() => handleSectionChange(item.id)} className={cx('sidebar-link w-full rounded-[24px] px-4 py-4 text-left transition-all', activeSection === item.id && 'sidebar-link-active')}>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-2xl border border-white/8 bg-black/10 p-2.5"><Icon className="h-4 w-4" /></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-white">{item.label}</span>
+                          <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-[11px] text-[var(--text-muted)]">{count}</span>
+                        </div>
+                        <div className="mt-1 text-sm text-[var(--text-soft)]">{item.description}</div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-[24px] border border-white/8 bg-black/10 p-4">
+              <div className="text-[11px] uppercase tracking-[0.28em] text-[var(--text-muted)]">Phiên hiện tại</div>
+              <div className="mt-2 font-medium text-white">{currentUser?.display_name || currentUser?.username || 'Người dùng'}</div>
+              <div className="mt-1 text-sm text-[var(--text-soft)]">{currentUser?.role === 'admin' ? 'Quản trị viên' : 'Vận hành'}</div>
+              <button type="button" className={cx(BUTTON_GHOST, 'mt-4 w-full')} onClick={handleLogout}><LogOut className="h-4 w-4" />Đăng xuất</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <div className="relative flex min-h-screen flex-col">
+        <aside className="hidden border-r border-white/8 bg-black/15 px-4 py-5 backdrop-blur-2xl lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-screen lg:w-[17rem] lg:flex-col lg:overflow-y-auto">
           <div className="panel-strong rounded-[30px] p-5">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-cyan-400/20 bg-cyan-400/10 text-cyan-100"><Zap className="h-6 w-6" /></div>
               <div>
                 <div className="text-[11px] uppercase tracking-[0.28em] text-[var(--text-muted)]">Social workbench</div>
-                <div className="mt-1 font-display text-2xl font-semibold text-white">Trạm điều phối</div>
+                <div className="mt-1 font-display text-xl font-semibold text-white">Trạm điều phối</div>
               </div>
             </div>
           </div>
           <nav className="mt-6 space-y-2">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
-              const count = { overview: warningCount, campaigns: campaigns.length, queue: stats.ready ?? 0, engagement: systemInfo?.pending_replies ?? 0, operations: taskSummary.failed ?? 0, security: users.length || (currentUser ? 1 : 0) }[item.id];
+              const count = {
+                overview: warningCount,
+                campaigns: campaigns.length,
+                queue: stats.ready ?? 0,
+                engagement: systemInfo?.pending_comment_replies ?? 0,
+                messages: systemInfo?.pending_message_replies ?? 0,
+                operations: taskSummary.failed ?? 0,
+                security: users.length || (currentUser ? 1 : 0),
+              }[item.id];
               return (
                 <button key={item.id} type="button" onClick={() => handleSectionChange(item.id)} className={cx('sidebar-link w-full rounded-[24px] px-4 py-4 text-left transition-all', activeSection === item.id && 'sidebar-link-active')}>
                   <div className="flex items-start gap-3">
@@ -1597,34 +2219,43 @@ function App() {
             <button type="button" className={cx(BUTTON_GHOST, 'mt-4 w-full')} onClick={handleLogout}><LogOut className="h-4 w-4" />Đăng xuất</button>
           </div>
         </aside>
-        <div className="min-w-0 flex-1">
-          <div className="mx-auto flex min-h-screen w-full max-w-[2000px] flex-col px-4 py-4 lg:px-6 xl:px-8">
-            <Panel className="overflow-hidden">
+        <div className="min-w-0 flex-1 lg:pl-[17rem]">
+          <div className="mx-auto flex min-h-screen w-full max-w-[1720px] flex-col px-3 py-3 sm:px-4 sm:py-4 lg:px-5 xl:px-6">
+            <Panel className="sticky top-0 z-20 overflow-hidden border-white/10 bg-[rgba(2,28,68,0.92)] backdrop-blur-xl">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0">
-                  <StatusPill tone="sky" icon={Activity}>Dashboard vận hành</StatusPill>
-                  <div className="mt-4 text-[11px] uppercase tracking-[0.32em] text-[var(--text-muted)]">{systemInfo?.project_name || 'Hệ thống tự động mạng xã hội'}</div>
-                  <h1 className="mt-3 font-display text-3xl font-semibold text-white md:text-4xl">{currentSection.label}</h1>
+                <div className="flex items-start gap-3">
+                  <button type="button" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white lg:hidden" onClick={() => setIsMobileNavOpen(true)}>
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0">
+                    <StatusPill tone="sky" icon={Activity}>Dashboard vận hành</StatusPill>
+                    <div className="mt-4 text-[11px] uppercase tracking-[0.32em] text-[var(--text-muted)]">{systemInfo?.project_name || 'Hệ thống tự động mạng xã hội'}</div>
+                    <h1 className="mt-3 font-display text-[1.4rem] font-semibold text-white sm:text-[1.7rem] md:text-[2rem]">{currentSection.label}</h1>
+                    <p className="mt-2 text-sm text-[var(--text-soft)] lg:hidden">{currentSection.description}</p>
+                  </div>
                 </div>
-                <button type="button" className={BUTTON_SECONDARY} onClick={() => fetchDashboard()}><RefreshCw className={cx('h-4 w-4', isRefreshing ? 'animate-spin' : '')} />Làm mới</button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button type="button" className={cx(BUTTON_GHOST, 'lg:hidden')} onClick={() => handleSectionChange('overview')}>
+                    <Globe2 className="h-4 w-4" />
+                    Tổng quan
+                  </button>
+                  <button type="button" className={BUTTON_SECONDARY} onClick={() => fetchDashboard()}><RefreshCw className={cx('h-4 w-4', isRefreshing ? 'animate-spin' : '')} />Làm mới</button>
+                </div>
               </div>
               {notice ? <div className={cx('mt-5 rounded-[24px] border px-4 py-4 text-sm leading-7', notice.type === 'success' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-rose-400/20 bg-rose-400/10 text-rose-100')}>{notice.message}</div> : null}
-              <div className="-mx-1 mt-5 overflow-x-auto lg:hidden">
-                <div className="flex gap-2 px-1 pb-1">
-                  {NAV_ITEMS.map((item) => (
-                    <button key={item.id} type="button" onClick={() => handleSectionChange(item.id)} className={cx('whitespace-nowrap rounded-full border px-4 py-2.5 text-sm transition-all', activeSection === item.id ? 'border-cyan-400/30 bg-cyan-400/12 text-cyan-100' : 'border-white/10 bg-black/10 text-[var(--text-soft)]')}>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </Panel>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 2xl:grid-cols-5">
-              {metricCards.map((metric) => <MetricCard key={metric.label} {...metric} />)}
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {visibleMetricCards.map((metric) => <MetricCard key={metric.label} {...metric} />)}
             </div>
-            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            {metricCards.length > 4 ? (
+              <div className="mt-3 flex justify-start">
+                <DetailToggle expanded={showAllMetrics} onClick={() => setShowAllMetrics((current) => !current)} />
+              </div>
+            ) : null}
+            <div className="mt-5">{renderMobileQuickPanel()}</div>
+            <div className="mt-6 grid gap-5 2xl:grid-cols-[minmax(0,1fr)_19rem]">
               <div className="min-w-0 space-y-6">{renderActiveSection()}</div>
-              <aside className="space-y-6 xl:sticky xl:top-6 xl:h-fit">
+              <aside className="hidden space-y-5 2xl:sticky 2xl:top-5 2xl:block 2xl:h-fit">
                 <Panel eyebrow="Nhịp nhanh" title="Bảng điều phối">
                   <div className="space-y-3">
                     <InfoRow label="Server time" value={formatDateTime(systemInfo?.server_time)} />
@@ -1653,11 +2284,16 @@ function App() {
                 <Panel eyebrow="Fanpage" title="Kết nối nhanh">
                   <div className="space-y-3">
                     {fbPages.length === 0 ? <div className="rounded-[22px] border border-white/8 bg-black/10 px-4 py-4 text-sm text-[var(--text-soft)]">Chưa cấu hình fanpage nào.</div> : fbPages.slice(0, 4).map((pageItem) => {
-                      const tokenMeta = getPageTokenMeta(pageItem.token_kind);
+                      const validation = pageChecks[pageItem.page_id];
+                      const tokenMeta = getPageTokenMeta(getResolvedPageTokenKind(pageItem, validation));
+                      const messengerMeta = getMessengerConnectionMeta(validation);
                       return (
                         <div key={pageItem.page_id} className="rounded-[22px] border border-white/8 bg-black/10 px-4 py-4">
                           <div className="font-medium text-white">{pageItem.page_name}</div>
-                          <div className="mt-2 flex flex-wrap gap-2"><StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill></div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <StatusPill tone={tokenMeta.tone}>{tokenMeta.label}</StatusPill>
+                            <StatusPill tone={messengerMeta.tone}>{messengerMeta.label}</StatusPill>
+                          </div>
                         </div>
                       );
                     })}

@@ -55,3 +55,37 @@ def test_admin_can_create_list_and_reset_user(client, auth_headers):
     )
     assert operator_login.status_code == 200
     assert operator_login.json()["user"]["must_change_password"] is True
+
+
+def test_admin_can_delete_user(client, auth_headers):
+    create_response = client.post(
+        "/users/",
+        headers=auth_headers,
+        json={
+            "username": "operator2",
+            "display_name": "Nhân viên cũ",
+            "password": "Operator123",
+            "role": "operator",
+        },
+    )
+    assert create_response.status_code == 200
+    created_user = create_response.json()["user"]
+
+    delete_response = client.delete(f"/users/{created_user['id']}", headers=auth_headers)
+    assert delete_response.status_code == 200
+    assert "Đã xóa người dùng 'operator2'" in delete_response.json()["message"]
+
+    list_response = client.get("/users/", headers=auth_headers)
+    assert list_response.status_code == 200
+    usernames = [user["username"] for user in list_response.json()["users"]]
+    assert usernames == ["admin"]
+
+
+def test_admin_cannot_delete_current_account(client, auth_headers):
+    list_response = client.get("/users/", headers=auth_headers)
+    assert list_response.status_code == 200
+    admin_user = next(user for user in list_response.json()["users"] if user["username"] == "admin")
+
+    delete_response = client.delete(f"/users/{admin_user['id']}", headers=auth_headers)
+    assert delete_response.status_code == 400
+    assert delete_response.json()["detail"] == "Không thể xóa tài khoản đang đăng nhập."

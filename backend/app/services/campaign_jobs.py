@@ -8,9 +8,18 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models.models import Campaign, CampaignStatus, FacebookPage, InteractionLog, InteractionStatus, Video, VideoStatus
+from app.models.models import (
+    Campaign,
+    CampaignStatus,
+    FacebookPage,
+    InboxMessageLog,
+    InteractionLog,
+    InteractionStatus,
+    Video,
+    VideoStatus,
+)
 from app.services.ai_generator import generate_reply
-from app.services.fb_graph import reply_to_comment
+from app.services.fb_graph import reply_to_comment, send_page_message
 from app.services.observability import record_event
 from app.services.security import decrypt_secret
 from app.services.ytdlp_crawler import download_video, extract_metadata
@@ -262,8 +271,18 @@ def reply_to_comment_job(interaction_log_id: str) -> dict:
             db.commit()
             return {"ok": False, "log_id": interaction_log_id}
 
+        if page_config.comment_auto_reply_enabled is False:
+            log.status = InteractionStatus.ignored
+            log.ai_reply = "Tự động phản hồi bình luận đang tắt cho fanpage này."
+            db.commit()
+            return {"ok": False, "log_id": interaction_log_id}
+
         access_token = decrypt_secret(page_config.long_lived_access_token)
-        ai_reply = generate_reply(log.user_message)
+        ai_reply = generate_reply(
+            log.user_message,
+            channel="comment",
+            prompt_override=page_config.comment_ai_prompt,
+        )
         log.ai_reply = ai_reply
 
         res = reply_to_comment(log.comment_id, ai_reply, access_token)
@@ -295,6 +314,83 @@ def reply_to_comment_job(interaction_log_id: str) -> dict:
             "Tiến trình phản hồi bình luận gặp lỗi.",
             db=db,
             details={"log_id": interaction_log_id, "error": str(exc)},
+        )
+        raise
+    finally:
+        db.close()
+
+
+def reply_to_message_job(message_log_id: str) -> dict:
+    db: Session = SessionLocal()
+    try:
+        log_uuid = parse_uuid_or_none(message_log_id)
+        if not log_uuid:
+            raise ValueError("Mã nhật ký inbox không hợp lệ.")
+
+        log = db.query(InboxMessageLog).filter(InboxMessageLog.id == log_uuid).first()
+        if not log:
+            raise ValueError("Không tìm thấy tin nhắn inbox cần phản hồi.")
+
+        page_config = db.query(FacebookPage).filter(FacebookPage.page_id == log.page_id).first()
+        if not page_config or not page_config.long_lived_access_token:
+            log.status = InteractionStatus.failed
+            log.ai_reply = "Trang Facebook chưa có mã truy cập hợp lệ."
+            log.last_error = "Thiếu Page Access Token."
+            db.commit()
+            return {"ok": False, "log_id": message_log_id}
+
+        if not page_config.message_auto_reply_enabled:
+            log.status = InteractionStatus.ignored
+            log.ai_reply = "Tự động phản hồi inbox đang tắt cho fanpage này."
+            log.last_error = None
+            db.commit()
+            return {"ok": False, "ignored": True, "log_id": message_log_id}
+
+        access_token = decrypt_secret(page_config.long_lived_access_token)
+        ai_reply = generate_reply(
+            log.user_message,
+            channel="message",
+            prompt_override=page_config.message_ai_prompt,
+        )
+        log.ai_reply = ai_reply
+
+        res = send_page_message(log.sender_id, ai_reply, access_token)
+        if res and ("message_id" in res or "recipient_id" in res):
+            log.status = InteractionStatus.replied
+            log.facebook_reply_message_id = res.get("message_id")
+            log.last_error = None
+            record_event(
+                "webhook",
+                "info",
+                "Đã phản hồi tin nhắn inbox thành công.",
+                db=db,
+                details={"page_id": log.page_id, "sender_id": log.sender_id, "message_id": log.facebook_message_id},
+            )
+        else:
+            log.status = InteractionStatus.failed
+            log.last_error = str(res or "Facebook không trả về kết quả hợp lệ.")
+            record_event(
+                "webhook",
+                "warning",
+                "Phản hồi tin nhắn inbox không thành công.",
+                db=db,
+                details={
+                    "page_id": log.page_id,
+                    "sender_id": log.sender_id,
+                    "message_id": log.facebook_message_id,
+                    "response": res,
+                },
+            )
+
+        db.commit()
+        return {"ok": log.status == InteractionStatus.replied, "log_id": message_log_id}
+    except Exception as exc:
+        record_event(
+            "webhook",
+            "error",
+            "Tiến trình phản hồi tin nhắn inbox gặp lỗi.",
+            db=db,
+            details={"log_id": message_log_id, "error": str(exc)},
         )
         raise
     finally:

@@ -12,6 +12,7 @@ from app.models.models import (
     Campaign,
     CampaignStatus,
     FacebookPage,
+    InboxMessageLog,
     InteractionLog,
     InteractionStatus,
     SystemEvent,
@@ -98,6 +99,8 @@ def get_system_overview(db: Session = Depends(get_db)):
     online_workers = db.query(WorkerHeartbeat).filter(WorkerHeartbeat.last_seen_at >= worker_cutoff).count()
     queue_summary = summarize_tasks(db)
     must_change_password = db.query(User).filter(User.must_change_password.is_(True)).count()
+    pending_comment_replies = db.query(InteractionLog).filter(InteractionLog.status == InteractionStatus.pending).count()
+    pending_message_replies = db.query(InboxMessageLog).filter(InboxMessageLog.status == InteractionStatus.pending).count()
 
     if must_change_password:
         warnings.append("Có tài khoản đang bị yêu cầu đổi mật khẩu.")
@@ -121,7 +124,10 @@ def get_system_overview(db: Session = Depends(get_db)):
         "active_campaigns": db.query(Campaign).filter(Campaign.status == CampaignStatus.active).count(),
         "paused_campaigns": db.query(Campaign).filter(Campaign.status == CampaignStatus.paused).count(),
         "queue_ready": db.query(Video).filter(Video.status == VideoStatus.ready).count(),
-        "pending_replies": db.query(InteractionLog).filter(InteractionLog.status == InteractionStatus.pending).count(),
+        "pending_comment_replies": pending_comment_replies,
+        "pending_message_replies": pending_message_replies,
+        "pending_replies": pending_comment_replies + pending_message_replies,
+        "message_auto_reply_pages": db.query(FacebookPage).filter(FacebookPage.message_auto_reply_enabled.is_(True)).count(),
         "active_users": active_users,
         "online_workers": online_workers,
         "must_change_password_users": must_change_password,

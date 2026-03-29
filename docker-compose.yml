@@ -117,6 +117,7 @@ services:
     container_name: social_tunnel
     restart: always
     logging: *default-logging
+    network_mode: "service:backend"
     env_file:
       - ./backend/runtime.env
     command: tunnel --no-autoupdate run

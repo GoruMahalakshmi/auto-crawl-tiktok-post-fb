@@ -142,3 +142,35 @@ def reset_user_password(
         "temporary_password": temporary_password,
         "user": serialize_user(user),
     }
+
+
+@router.delete("/{user_id}")
+def delete_user_endpoint(
+    user_id: str,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == parse_uuid_or_400(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng.")
+
+    if str(user.id) == str(admin_user.id):
+        raise HTTPException(status_code=400, detail="Không thể xóa tài khoản đang đăng nhập.")
+
+    if user.role == UserRole.admin and count_admin_users(db, active_only=True, exclude_user_id=str(user.id)) == 0:
+        raise HTTPException(status_code=400, detail="Không thể xóa quản trị viên cuối cùng đang hoạt động.")
+
+    deleted_username = user.username
+    deleted_role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    db.delete(user)
+    db.commit()
+
+    record_event(
+        "auth",
+        "warning",
+        "Đã xóa vĩnh viễn người dùng.",
+        db=db,
+        actor_user_id=str(admin_user.id),
+        details={"target_user": deleted_username, "role": deleted_role},
+    )
+    return {"message": f"Đã xóa người dùng '{deleted_username}' khỏi hệ thống."}

@@ -24,6 +24,7 @@ class Settings:
     DEFAULT_ADMIN_USERNAME: str = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     DEFAULT_ADMIN_DISPLAY_NAME: str = os.getenv("DEFAULT_ADMIN_DISPLAY_NAME", "Quản trị viên")
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
+    APP_TIMEZONE: str = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
     FB_VERIFY_TOKEN: str = os.getenv("FB_VERIFY_TOKEN", "social_auto_2026")
     FB_APP_SECRET: str = os.getenv("FB_APP_SECRET", "")
     TUNNEL_TOKEN: str = os.getenv("TUNNEL_TOKEN", "")
