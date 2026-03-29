@@ -1,0 +1,84 @@
+<svg width="1280" height="760" viewBox="0 0 1280 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="760" rx="28" fill="#F3F7FB"/>
+  <rect x="28" y="28" width="1224" height="704" rx="24" fill="#FFFFFF" stroke="#D6E2F0"/>
+
+  <rect x="52" y="52" width="250" height="656" rx="22" fill="#012456"/>
+  <text x="78" y="96" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">Social Tool</text>
+  <text x="78" y="122" fill="#9DBBE3" font-family="Inter, Arial, sans-serif" font-size="14">Sidebar điều hướng</text>
+
+  <rect x="72" y="156" width="210" height="54" rx="14" fill="#0E3D7A"/>
+  <text x="98" y="190" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Tổng quan</text>
+
+  <rect x="72" y="224" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="254" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Chiến dịch</text>
+
+  <rect x="72" y="286" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="316" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Lịch đăng</text>
+
+  <rect x="72" y="348" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="378" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Tương tác</text>
+
+  <rect x="72" y="410" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="440" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Tin nhắn AI</text>
+
+  <rect x="72" y="472" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="502" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Vận hành</text>
+
+  <rect x="72" y="534" width="210" height="48" rx="14" fill="#073267"/>
+  <text x="98" y="564" fill="#D8E6F7" font-family="Inter, Arial, sans-serif" font-size="17">Bảo mật</text>
+
+  <rect x="330" y="52" width="650" height="96" rx="22" fill="#F7FAFE" stroke="#D6E2F0"/>
+  <text x="362" y="95" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">Workbench vận hành chính</text>
+  <text x="362" y="123" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="16">Khu làm việc tập trung cho cấu hình, chiến dịch, queue, phản hồi AI và giám sát hệ thống</text>
+
+  <rect x="330" y="170" width="314" height="160" rx="22" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="358" y="208" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Runtime Config</text>
+  <text x="358" y="236" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">BASE_URL, FB_VERIFY_TOKEN, FB_APP_SECRET, GEMINI_API_KEY, TUNNEL_TOKEN</text>
+  <rect x="358" y="260" width="258" height="18" rx="9" fill="#E6EEF8"/>
+  <rect x="358" y="292" width="230" height="18" rx="9" fill="#E6EEF8"/>
+
+  <rect x="666" y="170" width="314" height="160" rx="22" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="694" y="208" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Fanpage &amp; AI</text>
+  <text x="694" y="236" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">Prompt comment, prompt inbox, lịch phản hồi, cooldown và trạng thái webhook</text>
+  <rect x="694" y="260" width="258" height="18" rx="9" fill="#E6EEF8"/>
+  <rect x="694" y="292" width="204" height="18" rx="9" fill="#E6EEF8"/>
+
+  <rect x="330" y="352" width="314" height="156" rx="22" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="358" y="390" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Campaign &amp; Queue</text>
+  <text x="358" y="418" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">Tạo campaign, sync lại, pause/resume, ưu tiên video, retry lỗi</text>
+  <rect x="358" y="446" width="258" height="18" rx="9" fill="#E6EEF8"/>
+  <rect x="358" y="478" width="210" height="18" rx="9" fill="#E6EEF8"/>
+
+  <rect x="666" y="352" width="314" height="156" rx="22" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="694" y="390" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Comments &amp; Inbox Logs</text>
+  <text x="694" y="418" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">Theo dõi sự kiện thật từ Facebook và trạng thái phản hồi</text>
+  <rect x="694" y="446" width="258" height="18" rx="9" fill="#E6EEF8"/>
+  <rect x="694" y="478" width="184" height="18" rx="9" fill="#E6EEF8"/>
+
+  <rect x="330" y="530" width="650" height="178" rx="22" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="358" y="570" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Vận hành hệ thống</text>
+  <text x="358" y="598" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">Worker heartbeat, task queue, system events, cleanup stale workers, user management</text>
+  <rect x="358" y="626" width="594" height="18" rx="9" fill="#E6EEF8"/>
+  <rect x="358" y="658" width="420" height="18" rx="9" fill="#E6EEF8"/>
+
+  <rect x="1008" y="52" width="220" height="656" rx="22" fill="#F7FAFE" stroke="#D6E2F0"/>
+  <text x="1036" y="94" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700">Tóm tắt nhanh</text>
+  <text x="1036" y="122" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="15">Khu phụ để xem nhanh trạng thái hiện tại</text>
+
+  <rect x="1032" y="154" width="172" height="88" rx="18" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="1054" y="188" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="14">Campaign đang chạy</text>
+  <text x="1054" y="222" fill="#012456" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="700">12</text>
+
+  <rect x="1032" y="258" width="172" height="88" rx="18" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="1054" y="292" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="14">Task chờ</text>
+  <text x="1054" y="326" fill="#012456" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="700">08</text>
+
+  <rect x="1032" y="362" width="172" height="88" rx="18" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="1054" y="396" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="14">Worker online</text>
+  <text x="1054" y="430" fill="#012456" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="700">01</text>
+
+  <rect x="1032" y="474" width="172" height="126" rx="18" fill="#FFFFFF" stroke="#D6E2F0"/>
+  <text x="1054" y="508" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="14">Cảnh báo nổi bật</text>
+  <text x="1054" y="542" fill="#0B1F3A" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600">HTTPS công khai</text>
+  <text x="1054" y="568" fill="#55708F" font-family="Inter, Arial, sans-serif" font-size="14">Kiểm tra BASE_URL, webhook, FB_APP_SECRET</text>
+</svg>
