@@ -142,3 +142,14 @@ npm run build
 ## Contributing
 
 Có thể mở issue hoặc pull request nếu bạn muốn mở rộng tính năng hay cải thiện luồng vận hành.
+
+## Ủng Hộ Qua MoMo
+
+Nếu dự án hữu ích, bạn có thể ủng hộ tác giả qua MoMo bằng cách quét QR bên dưới.
+
+<p align="center">
+  <img src="docs/momo-qr.png" alt="QR MoMo" width="280" />
+</p>
+
+- Kênh hỗ trợ: `MoMo`
+- Tác giả: [https://github.com/duytk9](https://github.com/duytk9)
