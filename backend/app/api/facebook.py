@@ -45,6 +45,9 @@ class FacebookAutomationUpdate(BaseModel):
     affiliate_comment_text: str | None = None
     affiliate_link_url: str | None = None
     affiliate_comment_delay_seconds: int = Field(default=60, ge=0, le=3600)
+    affiliate_comment_target_count: int = Field(default=3, ge=1, le=10)
+    affiliate_comment_min_delay_seconds: int = Field(default=60, ge=0, le=3600)
+    affiliate_comment_max_delay_seconds: int = Field(default=600, ge=0, le=3600)
 
 
 def _normalize_time_string(value: str, *, field_name: str) -> str:
@@ -117,6 +120,9 @@ def serialize_page_config(page: FacebookPage) -> dict:
         "affiliate_comment_text": page.affiliate_comment_text or "",
         "affiliate_link_url": page.affiliate_link_url or "",
         "affiliate_comment_delay_seconds": page.affiliate_comment_delay_seconds or 60,
+        "affiliate_comment_target_count": page.affiliate_comment_target_count or 3,
+        "affiliate_comment_min_delay_seconds": page.affiliate_comment_min_delay_seconds or 60,
+        "affiliate_comment_max_delay_seconds": page.affiliate_comment_max_delay_seconds or 600,
     }
 
 
@@ -531,6 +537,11 @@ def update_facebook_automation(page_id: str, payload: FacebookAutomationUpdate, 
             status_code=400,
             detail="Khi bật comment affiliate, bạn cần nhập ít nhất một nội dung hoặc một link affiliate.",
         )
+    if payload.affiliate_comment_max_delay_seconds < payload.affiliate_comment_min_delay_seconds:
+        raise HTTPException(
+            status_code=400,
+            detail="Khoảng delay tối đa phải lớn hơn hoặc bằng khoảng delay tối thiểu của comment affiliate.",
+        )
 
     page.comment_auto_reply_enabled = payload.comment_auto_reply_enabled
     page.comment_ai_prompt = (payload.comment_ai_prompt or "").strip() or None
@@ -543,7 +554,10 @@ def update_facebook_automation(page_id: str, payload: FacebookAutomationUpdate, 
     page.affiliate_comment_enabled = payload.affiliate_comment_enabled
     page.affiliate_comment_text = affiliate_comment_text or None
     page.affiliate_link_url = affiliate_link_url or None
-    page.affiliate_comment_delay_seconds = payload.affiliate_comment_delay_seconds
+    page.affiliate_comment_delay_seconds = payload.affiliate_comment_min_delay_seconds
+    page.affiliate_comment_target_count = payload.affiliate_comment_target_count
+    page.affiliate_comment_min_delay_seconds = payload.affiliate_comment_min_delay_seconds
+    page.affiliate_comment_max_delay_seconds = payload.affiliate_comment_max_delay_seconds
     db.commit()
     db.refresh(page)
 
@@ -562,6 +576,9 @@ def update_facebook_automation(page_id: str, payload: FacebookAutomationUpdate, 
             "message_reply_cooldown_minutes": page.message_reply_cooldown_minutes,
             "affiliate_comment_enabled": page.affiliate_comment_enabled,
             "affiliate_comment_delay_seconds": page.affiliate_comment_delay_seconds,
+            "affiliate_comment_target_count": page.affiliate_comment_target_count,
+            "affiliate_comment_min_delay_seconds": page.affiliate_comment_min_delay_seconds,
+            "affiliate_comment_max_delay_seconds": page.affiliate_comment_max_delay_seconds,
         },
     )
     return {

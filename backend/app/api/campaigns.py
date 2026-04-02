@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.time import utc_now, utc_today
 from app.models.models import AffiliateCommentStatus, Campaign, CampaignStatus, FacebookPage, User, Video, VideoStatus
 from app.services.ai_generator import generate_caption
-from app.services.campaign_jobs import build_affiliate_comment_text
+from app.services.campaign_jobs import build_affiliate_comment_text, pick_affiliate_available_at, reset_affiliate_comment_state
 from app.services.fb_graph import publish_affiliate_comment
 from app.services.observability import record_event
 from app.services.security import decrypt_secret
@@ -146,8 +146,11 @@ def serialize_video(video: Video, page_name_map=None):
         "affiliate_comment_status": normalize_status(video.affiliate_comment_status),
         "affiliate_comment_text": video.affiliate_comment_text,
         "affiliate_comment_fb_id": video.affiliate_comment_fb_id,
+        "affiliate_comment_fb_ids": video.affiliate_comment_fb_ids or [],
         "affiliate_comment_error": video.affiliate_comment_error,
         "affiliate_comment_attempts": video.affiliate_comment_attempts or 0,
+        "affiliate_comment_target_count": video.affiliate_comment_target_count or 0,
+        "affiliate_comment_completed_count": video.affiliate_comment_completed_count or 0,
         "affiliate_comment_requested_at": serialize_datetime(video.affiliate_comment_requested_at),
         "affiliate_commented_at": serialize_datetime(video.affiliate_commented_at),
         "last_error": video.last_error,
@@ -623,13 +626,7 @@ def retry_video(video_id: str, db: Session = Depends(get_db)):
         video.last_error = None
         video.fb_post_id = None
         video.fb_permalink_url = None
-        video.affiliate_comment_status = AffiliateCommentStatus.disabled
-        video.affiliate_comment_text = None
-        video.affiliate_comment_fb_id = None
-        video.affiliate_comment_error = None
-        video.affiliate_comment_attempts = 0
-        video.affiliate_comment_requested_at = None
-        video.affiliate_commented_at = None
+        reset_affiliate_comment_state(video)
         db.commit()
         db.refresh(video)
         page_name_map = build_page_name_map(db)
@@ -646,13 +643,7 @@ def retry_video(video_id: str, db: Session = Depends(get_db)):
     video.fb_video_id = None
     video.fb_post_id = None
     video.fb_permalink_url = None
-    video.affiliate_comment_status = AffiliateCommentStatus.disabled
-    video.affiliate_comment_text = None
-    video.affiliate_comment_fb_id = None
-    video.affiliate_comment_error = None
-    video.affiliate_comment_attempts = 0
-    video.affiliate_comment_requested_at = None
-    video.affiliate_commented_at = None
+    reset_affiliate_comment_state(video)
     db.commit()
 
     task = enqueue_task(
@@ -717,10 +708,11 @@ def retry_affiliate_comment(video_id: str, db: Session = Depends(get_db)):
     if not affiliate_text:
         raise HTTPException(status_code=400, detail="Fanpage chưa có nội dung hoặc link affiliate để retry.")
 
-    available_at = utc_now() + timedelta(seconds=max(0, page.affiliate_comment_delay_seconds or 60))
+    available_at = pick_affiliate_available_at(page)
     video.affiliate_comment_status = AffiliateCommentStatus.queued
     video.affiliate_comment_text = affiliate_text
     video.affiliate_comment_error = None
+    video.affiliate_comment_target_count = max(1, video.affiliate_comment_target_count or page.affiliate_comment_target_count or 3)
     video.affiliate_comment_requested_at = available_at
     db.commit()
 
@@ -776,7 +768,15 @@ def send_affiliate_comment_manually(
     video.affiliate_comment_status = AffiliateCommentStatus.posted
     video.affiliate_comment_text = payload.message.strip()
     video.affiliate_comment_fb_id = result.get("comment_id")
+    existing_comment_ids = list(video.affiliate_comment_fb_ids or [])
+    if video.affiliate_comment_fb_id and video.affiliate_comment_fb_id not in existing_comment_ids:
+        existing_comment_ids.append(video.affiliate_comment_fb_id)
+    video.affiliate_comment_fb_ids = existing_comment_ids
     video.affiliate_comment_error = None
+    video.affiliate_comment_attempts = (video.affiliate_comment_attempts or 0) + 1
+    video.affiliate_comment_completed_count = max(video.affiliate_comment_completed_count or 0, video.affiliate_comment_target_count or page.affiliate_comment_target_count or 3)
+    video.affiliate_comment_target_count = max(1, video.affiliate_comment_target_count or page.affiliate_comment_target_count or 3)
+    video.affiliate_comment_requested_at = None
     video.affiliate_commented_at = utc_now()
     video.fb_post_id = result.get("post_id") or video.fb_post_id
     video.fb_permalink_url = result.get("permalink_url") or video.fb_permalink_url

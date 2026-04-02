@@ -40,6 +40,9 @@ class FacebookPage(Base):
     affiliate_comment_text = Column(String, nullable=True)
     affiliate_link_url = Column(String, nullable=True)
     affiliate_comment_delay_seconds = Column(Integer, default=60, nullable=False)
+    affiliate_comment_target_count = Column(Integer, default=3, nullable=False)
+    affiliate_comment_min_delay_seconds = Column(Integer, default=60, nullable=False)
+    affiliate_comment_max_delay_seconds = Column(Integer, default=600, nullable=False)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.core.time import utc_now
+from app.models.common import JSON_TYPE
 
 
 class CampaignStatus(str, enum.Enum):
@@ -72,8 +73,11 @@ class Video(Base):
     affiliate_comment_status = Column(Enum(AffiliateCommentStatus), default=AffiliateCommentStatus.disabled, nullable=False)
     affiliate_comment_text = Column(String, nullable=True)
     affiliate_comment_fb_id = Column(String, nullable=True)
+    affiliate_comment_fb_ids = Column(JSON_TYPE, nullable=True)
     affiliate_comment_error = Column(String, nullable=True)
     affiliate_comment_attempts = Column(Integer, default=0, nullable=False)
+    affiliate_comment_target_count = Column(Integer, default=0, nullable=False)
+    affiliate_comment_completed_count = Column(Integer, default=0, nullable=False)
     affiliate_comment_requested_at = Column(DateTime, nullable=True)
     affiliate_commented_at = Column(DateTime, nullable=True)
     last_error = Column(String, nullable=True)

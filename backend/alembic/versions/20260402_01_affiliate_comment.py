@@ -1,7 +1,7 @@
 """affiliate comment per page and per video
 
 Revision ID: 20260402_01
-Revises: 20260329_07_inbox_operator_workspace
+Revises: 20260329_07
 Create Date: 2026-04-02
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "20260402_01"
-down_revision = "20260329_07_inbox_operator_workspace"
+down_revision = "20260329_07"
 branch_labels = None
 depends_on = None
 

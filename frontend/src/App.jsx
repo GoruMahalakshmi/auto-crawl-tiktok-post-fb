@@ -3,7 +3,11 @@ import {
   Activity,
   AlertTriangle,
   Bot,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   CircleCheck,
+  CircleX,
   Clock,
   CloudDownload,
   Copy,
@@ -92,6 +96,9 @@ function buildReplyAutomationDraft(pageItem) {
     affiliate_comment_text: pageItem?.affiliate_comment_text || '',
     affiliate_link_url: pageItem?.affiliate_link_url || '',
     affiliate_comment_delay_seconds: pageItem?.affiliate_comment_delay_seconds ?? 60,
+    affiliate_comment_target_count: pageItem?.affiliate_comment_target_count ?? 3,
+    affiliate_comment_min_delay_seconds: pageItem?.affiliate_comment_min_delay_seconds ?? 60,
+    affiliate_comment_max_delay_seconds: pageItem?.affiliate_comment_max_delay_seconds ?? 600,
   };
 }
 
@@ -2361,11 +2368,15 @@ function App() {
                         <StatusPill tone={sourcePlatformMeta.tone}>{sourcePlatformMeta.label}</StatusPill>
                         <StatusPill tone="slate">{getSourceKindLabel(item.source_kind)}</StatusPill>
                         <StatusPill tone="amber">Attempt {item.affiliate_comment_attempts ?? 0}</StatusPill>
+                        <StatusPill tone="emerald">
+                          {item.affiliate_comment_completed_count ?? 0}/{item.affiliate_comment_target_count ?? 0} comment
+                        </StatusPill>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <InfoRow label="Đăng lúc" value={formatDateTime(item.updated_at)} emphasis />
                       <InfoRow label="Link bài đăng" value={item.fb_permalink_url ? 'Có' : 'Chưa có'} />
+                      <InfoRow label="Lượt kế tiếp" value={item.affiliate_comment_requested_at ? formatRelTime(item.affiliate_comment_requested_at) : 'Chưa xếp lịch'} />
                     </div>
                   </div>
                   {item.affiliate_comment_error ? (
@@ -2655,7 +2666,7 @@ function App() {
                           Cooldown: {draft.message_reply_cooldown_minutes > 0 ? `${draft.message_reply_cooldown_minutes} phút` : 'Tắt'}
                         </StatusPill>
                         <StatusPill tone={draft.affiliate_comment_enabled ? 'rose' : 'slate'}>
-                          Aff: {draft.affiliate_comment_enabled ? `${draft.affiliate_comment_delay_seconds}s` : 'Tắt'}
+                          Aff: {draft.affiliate_comment_enabled ? `${draft.affiliate_comment_target_count || 3} lượt / ${Math.floor((draft.affiliate_comment_min_delay_seconds || 0) / 60)}-${Math.floor((draft.affiliate_comment_max_delay_seconds || 0) / 60)} phút` : 'Tắt'}
                         </StatusPill>
                       </div>
                       <div className="mt-3 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3 text-sm text-[var(--text-soft)]">
@@ -2797,17 +2808,44 @@ function App() {
                         </label>
                         <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
                           <label className="space-y-2">
-                            <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Delay sau khi đăng (giây)</span>
+                            <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Số lượt comment tự động</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="10"
+                              className={FIELD_CLASS}
+                              value={draft.affiliate_comment_target_count}
+                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'affiliate_comment_target_count', parseInt(event.target.value, 10) || 1)}
+                              disabled={!draft.affiliate_comment_enabled}
+                            />
+                            <div className="text-sm text-[var(--text-soft)]">Ví dụ: 3 lượt comment cho mỗi video đã đăng.</div>
+                          </label>
+                          <label className="space-y-2">
+                            <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Delay tối thiểu giữa các comment (giây)</span>
                             <input
                               type="number"
                               min="0"
                               max="3600"
                               className={FIELD_CLASS}
-                              value={draft.affiliate_comment_delay_seconds}
-                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'affiliate_comment_delay_seconds', parseInt(event.target.value, 10) || 0)}
+                              value={draft.affiliate_comment_min_delay_seconds}
+                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'affiliate_comment_min_delay_seconds', parseInt(event.target.value, 10) || 0)}
                               disabled={!draft.affiliate_comment_enabled}
                             />
-                            <div className="text-sm text-[var(--text-soft)]">Khuyến nghị 60 giây để Facebook kịp tạo object comment.</div>
+                          </label>
+                          <label className="space-y-2">
+                            <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Delay tối đa giữa các comment (giây)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="3600"
+                              className={FIELD_CLASS}
+                              value={draft.affiliate_comment_max_delay_seconds}
+                              onChange={(event) => handleReplyAutomationDraftChange(pageItem.page_id, 'affiliate_comment_max_delay_seconds', parseInt(event.target.value, 10) || 0)}
+                              disabled={!draft.affiliate_comment_enabled}
+                            />
+                            <div className="text-sm text-[var(--text-soft)]">
+                              Hệ thống sẽ random thời gian cho từng lượt trong khoảng {draft.affiliate_comment_min_delay_seconds || 0}-{draft.affiliate_comment_max_delay_seconds || 0} giây.
+                            </div>
                           </label>
                           <label className="space-y-2">
                             <span className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Danh sách link affiliate</span>
@@ -2831,7 +2869,7 @@ function App() {
                           disabled={!draft.affiliate_comment_enabled}
                         />
                         <div className="mt-3 text-sm text-[var(--text-soft)]">
-                          Mỗi nội dung hoặc link nhập trên một dòng. Khi tới lượt comment, hệ thống sẽ random hoàn toàn 1 nội dung và 1 link, ghép lại rồi comment sau {draft.affiliate_comment_delay_seconds || 0} giây. Nếu fail sau retry, mục đó sẽ rơi sang `Comment aff cần operator xử lý`.
+                          Mỗi nội dung hoặc link nhập trên một dòng. Mỗi lượt comment, hệ thống sẽ random hoàn toàn 1 nội dung và 1 link, sau đó tự xếp tối đa {draft.affiliate_comment_target_count || 3} lượt trong khoảng {draft.affiliate_comment_min_delay_seconds || 0}-{draft.affiliate_comment_max_delay_seconds || 0} giây. Nếu fail sau retry, mục đó sẽ rơi sang `Comment aff cần operator xử lý`.
                         </div>
                       </div>
                     </>

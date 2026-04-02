@@ -9,7 +9,8 @@ from app.models.models import (
     VideoStatus,
 )
 from app.services.campaign_jobs import build_affiliate_comment_text, has_affiliate_comment_options
-from app.services.campaign_jobs import post_affiliate_comment_job
+from app.services.campaign_jobs import post_affiliate_comment_job, queue_affiliate_comment_for_video
+from app.core.time import utc_now
 from app.services.security import encrypt_secret
 from app.services.task_queue import TASK_TYPE_AFFILIATE_COMMENT
 
@@ -23,6 +24,9 @@ def _seed_page_campaign_video(db_session, *, affiliate_enabled=True):
         affiliate_comment_text="Link sản phẩm mình để ở đây nhé.",
         affiliate_link_url="https://example.com/aff",
         affiliate_comment_delay_seconds=60,
+        affiliate_comment_target_count=3,
+        affiliate_comment_min_delay_seconds=60,
+        affiliate_comment_max_delay_seconds=600,
     )
     campaign = Campaign(
         name="Campaign Affiliate",
@@ -46,6 +50,8 @@ def _seed_page_campaign_video(db_session, *, affiliate_enabled=True):
         affiliate_comment_status=AffiliateCommentStatus.operator_required,
         affiliate_comment_text="Link sản phẩm mình để ở đây nhé.\nhttps://example.com/aff",
         affiliate_comment_error="Comment trước đó thất bại.",
+        affiliate_comment_target_count=3,
+        affiliate_comment_completed_count=1,
     )
     db_session.add_all([page, campaign, video])
     db_session.commit()
@@ -80,6 +86,9 @@ def test_update_facebook_automation_saves_affiliate_settings(client, auth_header
             "affiliate_comment_text": "Link sản phẩm mình để ở đây nhé.\nMình để link tham khảo ở dưới cho bạn nha.",
             "affiliate_link_url": "https://example.com/aff\nhttps://example.com/aff-2",
             "affiliate_comment_delay_seconds": 60,
+            "affiliate_comment_target_count": 3,
+            "affiliate_comment_min_delay_seconds": 60,
+            "affiliate_comment_max_delay_seconds": 600,
         },
     )
 
@@ -88,12 +97,18 @@ def test_update_facebook_automation_saves_affiliate_settings(client, auth_header
     assert payload["page"]["affiliate_comment_enabled"] is True
     assert payload["page"]["affiliate_link_url"] == "https://example.com/aff\nhttps://example.com/aff-2"
     assert payload["page"]["affiliate_comment_delay_seconds"] == 60
+    assert payload["page"]["affiliate_comment_target_count"] == 3
+    assert payload["page"]["affiliate_comment_min_delay_seconds"] == 60
+    assert payload["page"]["affiliate_comment_max_delay_seconds"] == 600
 
     db_session.refresh(page)
     assert page.affiliate_comment_enabled is True
     assert page.affiliate_comment_text == "Link sản phẩm mình để ở đây nhé.\nMình để link tham khảo ở dưới cho bạn nha."
     assert page.affiliate_link_url == "https://example.com/aff\nhttps://example.com/aff-2"
     assert page.affiliate_comment_delay_seconds == 60
+    assert page.affiliate_comment_target_count == 3
+    assert page.affiliate_comment_min_delay_seconds == 60
+    assert page.affiliate_comment_max_delay_seconds == 600
 
 
 def test_affiliate_comment_ignores_blank_lines_and_randomizes_choices():
@@ -131,6 +146,9 @@ def test_update_facebook_automation_rejects_blank_affiliate_lists(client, auth_h
             "affiliate_comment_text": "\n \n",
             "affiliate_link_url": "\n",
             "affiliate_comment_delay_seconds": 60,
+            "affiliate_comment_target_count": 3,
+            "affiliate_comment_min_delay_seconds": 60,
+            "affiliate_comment_max_delay_seconds": 600,
         },
     )
 
@@ -149,6 +167,8 @@ def test_retry_affiliate_comment_requeues_task(client, auth_headers, db_session)
     assert response.status_code == 200
     payload = response.json()
     assert payload["video"]["affiliate_comment_status"] == AffiliateCommentStatus.queued.value
+    assert payload["video"]["affiliate_comment_target_count"] == 3
+    assert payload["video"]["affiliate_comment_completed_count"] == 1
 
     db_session.expire_all()
     saved_video = db_session.query(Video).filter(Video.id == video.id).first()
@@ -186,11 +206,14 @@ def test_manual_affiliate_comment_marks_video_posted(client, auth_headers, db_se
     payload = response.json()
     assert payload["video"]["affiliate_comment_status"] == AffiliateCommentStatus.posted.value
     assert payload["video"]["affiliate_comment_fb_id"] == "fb-comment-1"
+    assert payload["video"]["affiliate_comment_completed_count"] == 3
 
     db_session.expire_all()
     saved_video = db_session.query(Video).filter(Video.id == video.id).first()
     assert saved_video.affiliate_comment_status == AffiliateCommentStatus.posted
     assert saved_video.affiliate_comment_fb_id == "fb-comment-1"
+    assert saved_video.affiliate_comment_completed_count == 3
+    assert saved_video.affiliate_comment_target_count == 3
     assert saved_video.fb_permalink_url == "https://facebook.com/reel/1"
 
 
@@ -215,3 +238,70 @@ def test_post_affiliate_comment_job_marks_operator_required_after_final_retry(db
     assert saved_video.affiliate_comment_status == AffiliateCommentStatus.operator_required
     assert saved_video.affiliate_comment_error == "Facebook từ chối comment."
     assert saved_video.affiliate_comment_attempts == 3
+
+
+def test_queue_affiliate_comment_sets_random_window_state(db_session, monkeypatch):
+    page, _, video = _seed_page_campaign_video(db_session)
+    video.affiliate_comment_status = AffiliateCommentStatus.disabled
+    video.affiliate_comment_completed_count = 0
+    video.affiliate_comment_attempts = 0
+    video.affiliate_comment_text = None
+    db_session.commit()
+
+    monkeypatch.setattr("app.services.campaign_jobs.random.randint", lambda start, end: 123)
+
+    result = queue_affiliate_comment_for_video(db_session, video, page)
+
+    assert result is not None
+    db_session.expire_all()
+    saved_video = db_session.query(Video).filter(Video.id == video.id).first()
+    assert saved_video.affiliate_comment_status == AffiliateCommentStatus.queued
+    assert saved_video.affiliate_comment_target_count == 3
+    assert saved_video.affiliate_comment_completed_count == 0
+    assert saved_video.affiliate_comment_requested_at is not None
+
+    delta = int((saved_video.affiliate_comment_requested_at - utc_now()).total_seconds())
+    assert 60 <= delta <= 180
+
+
+def test_post_affiliate_comment_job_schedules_next_round_after_success(db_session, monkeypatch):
+    page, _, video = _seed_page_campaign_video(db_session)
+    video.affiliate_comment_status = AffiliateCommentStatus.queued
+    video.affiliate_comment_completed_count = 0
+    video.affiliate_comment_target_count = 3
+    video.affiliate_comment_text = "Mẫu 1\nhttps://example.com/aff"
+    db_session.commit()
+
+    monkeypatch.setattr(
+        "app.services.campaign_jobs.publish_affiliate_comment",
+        lambda **kwargs: {
+            "comment_id": "fb-comment-1",
+            "post_id": "fb-post-1",
+            "permalink_url": "https://facebook.com/reel/1",
+        },
+    )
+    monkeypatch.setattr("app.services.campaign_jobs.random.randint", lambda start, end: 90)
+    monkeypatch.setattr("app.services.campaign_jobs.random.choice", lambda items: items[0])
+
+    result = post_affiliate_comment_job(str(video.id), attempt_number=1, max_attempts=3)
+
+    assert result["ok"] is True
+    assert result["completed_count"] == 1
+    assert result["target_count"] == 3
+    assert "next_task_id" in result
+
+    db_session.expire_all()
+    saved_video = db_session.query(Video).filter(Video.id == video.id).first()
+    assert saved_video.affiliate_comment_status == AffiliateCommentStatus.queued
+    assert saved_video.affiliate_comment_completed_count == 1
+    assert saved_video.affiliate_comment_target_count == 3
+    assert saved_video.affiliate_comment_fb_id == "fb-comment-1"
+    assert saved_video.affiliate_comment_fb_ids == ["fb-comment-1"]
+
+    queued_tasks = (
+        db_session.query(TaskQueue)
+        .filter(TaskQueue.task_type == TASK_TYPE_AFFILIATE_COMMENT, TaskQueue.entity_id == str(video.id))
+        .all()
+    )
+    assert len(queued_tasks) == 1
+    assert queued_tasks[0].status == TaskStatus.queued
